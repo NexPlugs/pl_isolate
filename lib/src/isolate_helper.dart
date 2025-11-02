@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:isolate';
 import 'package:dart_ui_isolate/dart_ui_isolate.dart';
 import 'package:flutter/services.dart';
@@ -5,9 +6,33 @@ import 'package:synchronized/synchronized.dart';
 
 import 'isolate_logger.dart';
 import 'utils/logger.dart';
+import 'package:nanoid/nanoid.dart';
+
+const alphabet =
+    '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
+String generateTaskId(String task) {
+  return "${task}_${customAlphabet(alphabet, 22)}";
+}
 
 /// Isolate helper to help with isolate communication
 /// [T] is the operation object to send to isolate
+///
+/// Format of the message:
+///
+/// [threadId, action, args, SendPort] -> SendPort is the port to send the answer to the main isolate
+/// action:
+/// - 'run' -> run the operation
+/// - 'log' -> log the message
+/// - 'error' -> log the error
+/// - 'info' -> log the info
+/// - 'warning' -> log the warning
+/// - 'debug' -> log the debug
+/// - 'trace' -> log the trace
+/// - 'fatal' -> log the fatal
+/// - 'critical' -> log the critical
+/// - 'alert' -> log the alert
+/// - 'emergency' -> log the emergency
 @pragma("vm:entry-point")
 abstract class IsolateHelper<T extends Object> {
   static const String tag = "IsolateHelper";
@@ -23,12 +48,17 @@ abstract class IsolateHelper<T extends Object> {
   bool get isAutoDispose;
   String get name;
 
+  String get operationTag;
+
   final _initLock = Lock();
+  final _runLock = Lock();
+
+  int _activeThread = 0;
 
   bool _isIsolateSpawn = false;
   bool get isIsolateSpawn => _isIsolateSpawn;
 
-  Future<void> initIsolate() async {
+  Future<void> _initIsolate() async {
     return _initLock.synchronized(() async {
       if (_isIsolateSpawn) return;
 
@@ -84,17 +114,55 @@ abstract class IsolateHelper<T extends Object> {
       BackgroundIsolateBinaryMessenger.ensureInitialized(rootToken);
     }
 
-    recieverPort.listen((message) {
+    recieverPort.listen((message) async {
       IsolateLogger.instance.log(tag, 'Message received: $message');
 
       final command = message[0] as String;
       final data = message[1] as dynamic;
 
+      if (command.startsWith(operationTag)) {
+        final operation = data as T;
+        final result = await runOperation<dynamic>(operation);
+        sendPort.send([operationTag, result]);
+        return;
+      }
+
       switch (command) {
         case 'log':
           IsolateLogger.instance.log(tag, data);
           break;
+        case 'error':
+          IsolateLogger.instance.error(tag, data, data[1]);
+          break;
+
+        default:
+          IsolateLogger.instance.error(tag, 'Unknown command: $command', null);
+          break;
       }
+    });
+  }
+
+  Future<dynamic> runIsolate(Map<String, dynamic> args) async {
+    await _initIsolate();
+
+    return _runLock.synchronized(() async {
+      final completer = Completer<dynamic>();
+      final answerPort = ReceivePort();
+
+      _activeThread++;
+      final threadId = generateTaskId(name);
+
+      _sendPort.send([threadId, tag, args, answerPort.sendPort]);
+
+      answerPort.listen((message) {
+        if (message[0] == threadId) {
+          completer.complete(message[1]);
+        }
+      });
+
+      _activeThread--;
+
+      return completer.future;
     });
   }
 
@@ -102,7 +170,11 @@ abstract class IsolateHelper<T extends Object> {
 
   Future<void> start();
 
-  Future<void> dispose();
+  Future<void> dispose() async {
+    _isIsolateSpawn = false;
+    _isolate.kill();
+    _receivePort.close();
+  }
 
   void post(dynamic message);
 
