@@ -1,8 +1,8 @@
-name: isolate_helper
+name: pl_isolate
 description: "A library to help with isolate communication."
 version: 1.0.0
-homepage: https://github.com/NexPlugs/isolate_helper
-repository: https://github.com/NexPlugs/isolate_helper
+homepage: https://github.com/NexPlugs/pl_isolate
+repository: https://github.com/NexPlugs/pl_isolate
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

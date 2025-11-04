@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 
-import 'package:isolate_helper/isolate_helper.dart';
+import 'package:pl_isolate/pl_isolate.dart';
 
 // Example operation 1: Count operation
 class CountableIsolateOperation implements IsolateOperation {

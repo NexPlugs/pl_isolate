@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 import 'package:dart_ui_isolate/dart_ui_isolate.dart';
 import 'package:flutter/services.dart';
-import 'package:isolate_helper/src/isolate_operation.dart';
+import 'package:pl_isolate/src/isolate_operation.dart';
 import 'package:synchronized/synchronized.dart';
 
 import 'isolate_logger.dart';
@@ -93,12 +93,15 @@ abstract class IsolateHelper<T> {
             [_receivePort.sendPort, null, name, operation],
           );
         } else {
-          _isolate = await Isolate.spawn(_isolateMainTopLevel, [
-            _receivePort.sendPort,
-            rootToken,
-            name,
-            operation,
-          ], debugName: name);
+          _isolate = await Isolate.spawn(
+              _isolateMainTopLevel,
+              [
+                _receivePort.sendPort,
+                rootToken,
+                name,
+                operation,
+              ],
+              debugName: name);
         }
 
         _mainSendPort = await _receivePort.first as SendPort;

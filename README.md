@@ -22,7 +22,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  isolate_helper: ^1.0.0
+  pl_isolate: ^1.0.0
 ```
 
 Then run:
@@ -38,7 +38,7 @@ flutter pub get
 Create an operation class that implements `IsolateOperation`:
 
 ```dart
-import 'package:isolate_helper/isolate_helper.dart';
+import 'package:pl_isolate/isolate_helper.dart';
 
 class MyCalculationOperation implements IsolateOperation {
   @override
@@ -124,7 +124,7 @@ Here's a complete example showing multiple operations:
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:isolate_helper/isolate_helper.dart';
+import 'package:pl_isolate/isolate_helper.dart';
 
 // Define operations
 class CountOperation implements IsolateOperation {
@@ -457,7 +457,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Support
 
-For issues and feature requests, please use the [GitHub Issues](https://github.com/NexPlugs/isolate_helper/issues) page.
+For issues and feature requests, please use the [GitHub Issues](https://github.com/NexPlugs/pl_isolate/issues) page.
 
 ---
 

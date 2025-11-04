@@ -1,6 +1,6 @@
-# isolate_helper_example
+# pl_isolate_example
 
-Demonstrates how to use the isolate_helper plugin.
+Demonstrates how to use the pl_isolate plugin.
 
 ## Getting Started
 
