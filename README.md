@@ -1,4 +1,4 @@
-# Isolate Helper
+# pl_isolate
 
 
 https://github.com/user-attachments/assets/31985cfa-f3b4-440e-8459-fdc4f8dc7fe1
@@ -38,7 +38,7 @@ flutter pub get
 Create an operation class that implements `IsolateOperation`:
 
 ```dart
-import 'package:pl_isolate/isolate_helper.dart';
+import 'package:pl_isolate/pl_isolate.dart';
 
 class MyCalculationOperation implements IsolateOperation {
   @override
@@ -124,7 +124,7 @@ Here's a complete example showing multiple operations:
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:pl_isolate/isolate_helper.dart';
+import 'package:pl_isolate/pl_isolate.dart';
 
 // Define operations
 class CountOperation implements IsolateOperation {
@@ -461,4 +461,4 @@ For issues and feature requests, please use the [GitHub Issues](https://github.c
 
 ---
 
-Made with ❤️ by the Isolate Helper team
+Made with ❤️ by the NexPlugs team
