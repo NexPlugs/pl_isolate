@@ -28,14 +28,17 @@ class IsolateLogger {
 
   void log(String tag, String message) {
     _logs.add(IsolateLog(tag: tag, message: message));
+    Logger.d(tag, 'Isolate log: $message');
   }
 
   void error(String tag, String message, Object? error) {
     _logs.add(IsolateLog(tag: tag, message: message, error: error));
+    Logger.e(tag, 'Isolate error: $message');
   }
 
   void info(String tag, String message) {
     _logs.add(IsolateLog(tag: tag, message: message));
+    Logger.i(tag, 'Isolate info: $message');
   }
 
   void logRecordIsolate() {

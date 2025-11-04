@@ -9,3 +9,4 @@ export 'src/isolate_helper.dart';
 export 'src/isolate_logger.dart';
 export 'src/isolate_manager.dart';
 export 'src/isolate_cache.dart';
+export 'src/isolate_operation.dart';
