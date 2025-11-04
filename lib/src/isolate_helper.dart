@@ -44,7 +44,7 @@ abstract class IsolateHelper<T> {
 
   late final ReceivePort _receivePort;
 
-  late final SendPort _sendPort;
+  late final SendPort _mainSendPort;
 
   final _initLock = Lock();
   final _runLock = Lock();
@@ -53,17 +53,15 @@ abstract class IsolateHelper<T> {
 
   bool get autoDispose => true;
 
+  ///[dispose] If the isolate is auto disposed
+  /// Is the isolate auto disposed
+  bool get isAutoDispose;
+
   /// Interval to dispose the isolate if it is inactive for 10 seconds
   Duration get autoDisposeInterval => const Duration(seconds: 10);
 
-  /// Send port to send message to isolate
-  SendPort get sendPort => _sendPort;
-
   /// Is the isolate a Dart isolate
   bool get isDartIsolate;
-
-  /// Is the isolate auto disposed
-  bool get isAutoDispose;
 
   /// Name of the isolate
   String get name;
@@ -103,7 +101,7 @@ abstract class IsolateHelper<T> {
           ], debugName: name);
         }
 
-        _sendPort = await _receivePort.first as SendPort;
+        _mainSendPort = await _receivePort.first as SendPort;
 
         _isIsolateSpawn = true;
       } catch (e) {
@@ -131,7 +129,7 @@ abstract class IsolateHelper<T> {
       _activeThread++;
       final threadId = generateThreadId(name);
 
-      _sendPort.send([threadId, operation.tag, args, answerPort.sendPort]);
+      _mainSendPort.send([threadId, operation.tag, args, answerPort.sendPort]);
 
       answerPort.listen((message) {
         IsolateLogger.instance.log(tag, 'Message received: $message');
@@ -166,8 +164,7 @@ abstract class IsolateHelper<T> {
   }
 
   /// Isolate main top level function
-  /// This function is used to handle the message from the isolate
-  /// and send the message to the main isolate
+  /// This function is used to handle the message from the isolate and send the message to the main isolate
   static void _isolateMainTopLevel(List<dynamic> message) {
     const tag = IsolateHelper.tag;
     final sendPort = message[0] as SendPort;
@@ -191,6 +188,7 @@ abstract class IsolateHelper<T> {
       final threadId = message[0] as String;
       final action = message[1] as String;
       final args = message[2] as dynamic;
+      final answerPort = message[3] as SendPort;
 
       // First message might be handler setup
 
@@ -199,7 +197,7 @@ abstract class IsolateHelper<T> {
         IsolateLogger.instance.log(tag, 'Operation: ${operation.tag}');
         try {
           final result = await operation.run(args);
-          sendPort.send([threadId, result, null]);
+          answerPort.send([threadId, result, null]);
           IsolateLogger.instance.log(tag, 'Result: $result');
         } catch (exception) {
           IsolateLogger.instance.error(
@@ -207,7 +205,7 @@ abstract class IsolateHelper<T> {
             'Error in operation: $exception',
             exception,
           );
-          sendPort.send([threadId, null, exception]);
+          answerPort.send([threadId, null, exception]);
         }
       } else {
         switch (action) {

@@ -9,7 +9,6 @@ class CountableIsolateOperation implements IsolateOperation {
 
   @override
   Future<dynamic> run(dynamic args) async {
-    print("Running operation: $args");
     if (args is int) {
       int countable = 0;
       for (var i = 0; i < args; i++) {
