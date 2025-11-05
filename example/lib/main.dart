@@ -82,9 +82,6 @@ class CountIsolateHelper extends IsolateHelper<dynamic> {
   bool get autoDispose => true;
 
   @override
-  Stream get messages => throw UnimplementedError();
-
-  @override
   bool get isAutoDispose => true;
 }
 
@@ -98,9 +95,6 @@ class SumIsolateHelper extends IsolateHelper<dynamic> {
 
   @override
   bool get autoDispose => true;
-
-  @override
-  Stream get messages => throw UnimplementedError();
 
   @override
   bool get isAutoDispose => true;
@@ -118,9 +112,6 @@ class DelayIsolateHelper extends IsolateHelper<dynamic> {
   bool get autoDispose => true;
 
   @override
-  Stream get messages => throw UnimplementedError();
-
-  @override
   bool get isAutoDispose => true;
 }
 
@@ -134,9 +125,6 @@ class ErrorIsolateHelper extends IsolateHelper<dynamic> {
 
   @override
   bool get autoDispose => true;
-
-  @override
-  Stream get messages => throw UnimplementedError();
 
   @override
   bool get isAutoDispose => true;

@@ -2,83 +2,79 @@ import 'dart:async';
 import 'dart:isolate';
 import 'package:dart_ui_isolate/dart_ui_isolate.dart';
 import 'package:flutter/services.dart';
+import 'package:pl_isolate/src/isolate_cache.dart';
 import 'package:pl_isolate/src/isolate_operation.dart';
 import 'package:synchronized/synchronized.dart';
+import 'package:nanoid/nanoid.dart';
 
 import 'isolate_logger.dart';
 import 'utils/logger.dart';
-import 'package:nanoid/nanoid.dart';
 
-const alphabet =
+const _alphabet =
     '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
-String generateThreadId(String task) {
-  return "${task}_${customAlphabet(alphabet, 22)}";
-}
+String generateThreadId(String task) =>
+    "${task}_${customAlphabet(_alphabet, 22)}";
 
-/// Isolate helper to help with isolate communication
+/// Isolate helper to simplify isolate creation, caching and communication.
 ///
-/// Format of the message from sub thread to main thread:
-/// [threadId, action, args, SendPort] -> SendPort is the port to send the answer to the main isolate
-
-/// Format of the message from main thread to sub thread
-/// If data susccess:
-/// [threadId, data, null]
-///
-/// If data error:
-/// [threadId, null, exception]
-
+/// Message formats:
+/// - From sub isolate to main: `[threadId, action, args, SendPort]`
+/// - From main isolate to sub isolate:
+///   - Success: `[threadId, data, null]`
+///   - Error: `[threadId, null, exception]`
 @pragma("vm:entry-point")
 abstract class IsolateHelper<T> {
   static const String tag = "IsolateHelper";
 
-  /// Commands to send to isolate
+  // Common actions
   static const String actionLog = 'log';
   static const String actionError = 'error';
   static const String actionUnknown = 'unknown';
 
   late final dynamic _isolate;
-
-  /// Timer to dispose the isolate if it is inactive for 10 seconds
-  Timer? _inactiveTimer;
-
   late final ReceivePort _receivePort;
-
   late final SendPort _mainSendPort;
 
   final _initLock = Lock();
   final _runLock = Lock();
 
+  Timer? _inactiveTimer;
+  IsolateCache<String, dynamic>? _cache;
+
+  bool _isIsolateSpawn = false;
   int _activeThread = 0;
 
+  /// Configurations
   bool get autoDispose => true;
-
-  ///[dispose] If the isolate is auto disposed
-  /// Is the isolate auto disposed
   bool get isAutoDispose;
-
-  /// Interval to dispose the isolate if it is inactive for 10 seconds
-  Duration get autoDisposeInterval => const Duration(seconds: 10);
-
-  /// Is the isolate a Dart isolate
   bool get isDartIsolate;
-
-  /// Name of the isolate
   String get name;
 
-  /// Is the isolate spawned
-  bool _isIsolateSpawn = false;
+  Duration get autoDisposeInterval => const Duration(seconds: 10);
+  int? get maxCacheEntries => null;
+  Duration? get defaultCacheTtl => null;
 
-  /// Is the isolate spawned
   bool get isIsolateSpawn => _isIsolateSpawn;
 
-  /// Initialize the isolate
+  /// Lazy cache initialization
+  IsolateCache<String, dynamic>? get cache {
+    if (_cache == null &&
+        (maxCacheEntries != null || defaultCacheTtl != null)) {
+      _cache = IsolateCache<String, dynamic>(
+        maxEntries: maxCacheEntries,
+        defaultTtl: defaultCacheTtl,
+      );
+    }
+    return _cache;
+  }
+
+  /// Initialize isolate
   Future<void> _initIsolate(IsolateOperation operation) async {
     return _initLock.synchronized(() async {
       if (_isIsolateSpawn) return;
 
       _receivePort = ReceivePort();
-
       final rootToken = RootIsolateToken.instance;
 
       if (rootToken == null && !isDartIsolate) {
@@ -94,18 +90,13 @@ abstract class IsolateHelper<T> {
           );
         } else {
           _isolate = await Isolate.spawn(
-              _isolateMainTopLevel,
-              [
-                _receivePort.sendPort,
-                rootToken,
-                name,
-                operation,
-              ],
-              debugName: name);
+            _isolateMainTopLevel,
+            [_receivePort.sendPort, rootToken, name, operation],
+            debugName: name,
+          );
         }
 
         _mainSendPort = await _receivePort.first as SendPort;
-
         _isIsolateSpawn = true;
       } catch (e) {
         Logger.e(tag, 'Error initializing isolate: $e');
@@ -115,19 +106,23 @@ abstract class IsolateHelper<T> {
     });
   }
 
-  // Run the isolate and return the result
+  /// Run an isolate task and return result
   Future<T> runIsolate(dynamic args, IsolateOperation operation) async {
     Logger.d(tag, 'Running isolate: $name');
-
     await _initIsolate(operation);
 
     return _runLock.synchronized(() async {
-      Logger.d(tag, 'Running isolate: $name');
       if (autoDispose) _resetTimer();
 
       final completer = Completer<T>();
-
       final answerPort = ReceivePort();
+
+      // Return cached data if available
+      final cached = _cache?.get(name);
+      if (cached != null) {
+        completer.complete(cached);
+        return completer.future;
+      }
 
       _activeThread++;
       final threadId = generateThreadId(name);
@@ -139,35 +134,28 @@ abstract class IsolateHelper<T> {
 
         final receivedThreadId = message[0] as String;
         if (receivedThreadId != threadId) {
-          Logger.e(
-            tag,
-            'Received thread id does not match the expected thread id: $receivedThreadId != $threadId',
-          );
+          Logger.e(tag,
+              'Received thread id does not match expected: $receivedThreadId != $threadId');
           return;
         }
 
-        // Isolate logger to log the message
-        IsolateLogger.instance.log(tag, 'Message received: $message');
-
-        final result = message[1] as dynamic;
-        final exception = message[2] as dynamic;
+        final result = message[1];
+        final exception = message[2];
 
         if (exception != null) {
           completer.completeError(exception);
-          return;
+        } else {
+          _cache?.set(name, result, ttl: defaultCacheTtl);
+          completer.complete(result);
         }
-
-        completer.complete(result);
       });
 
       _activeThread--;
-
       return completer.future;
     });
   }
 
-  /// Isolate main top level function
-  /// This function is used to handle the message from the isolate and send the message to the main isolate
+  /// Main isolate entry point
   static void _isolateMainTopLevel(List<dynamic> message) {
     const tag = IsolateHelper.tag;
     final sendPort = message[0] as SendPort;
@@ -177,63 +165,37 @@ abstract class IsolateHelper<T> {
 
     IsolateLogger.instance.log(tag, 'Isolate initialized: $isolateName');
 
-    final recieverPort = ReceivePort();
-
-    sendPort.send(recieverPort.sendPort);
+    final receiverPort = ReceivePort();
+    sendPort.send(receiverPort.sendPort);
 
     if (rootToken != null) {
       BackgroundIsolateBinaryMessenger.ensureInitialized(rootToken);
     }
 
-    recieverPort.listen((message) async {
+    receiverPort.listen((message) async {
       IsolateLogger.instance.log(tag, 'Main message received: $message');
 
       final threadId = message[0] as String;
       final action = message[1] as String;
-      final args = message[2] as dynamic;
+      final args = message[2];
       final answerPort = message[3] as SendPort;
 
-      // First message might be handler setup
-
-      // Check tag to handler operation
       if (action.startsWith(operation.tag)) {
-        IsolateLogger.instance.log(tag, 'Operation: ${operation.tag}');
         try {
           final result = await operation.run(args);
           answerPort.send([threadId, result, null]);
-          IsolateLogger.instance.log(tag, 'Result: $result');
         } catch (exception) {
-          IsolateLogger.instance.error(
-            tag,
-            'Error in operation: $exception',
-            exception,
-          );
+          IsolateLogger.instance
+              .error(tag, 'Error in operation: $exception', exception);
           answerPort.send([threadId, null, exception]);
         }
       } else {
-        switch (action) {
-          case IsolateHelper.actionLog:
-            IsolateLogger.instance.log(tag, args);
-            break;
-          case IsolateHelper.actionError:
-            IsolateLogger.instance.error(tag, args, args[1]);
-            break;
-
-          case IsolateHelper.actionUnknown:
-            IsolateLogger.instance.error(tag, 'Unknown action: $action', null);
-            break;
-
-          default:
-            IsolateLogger.instance.error(tag, 'Unknown action: $action', null);
-            break;
-        }
+        IsolateLogger.instance.error(tag, 'Unknown action: $action', null);
       }
-
-      /// Handle the action if need
     });
   }
 
-  /// Reset the timer to dispose the isolate if it is inactive for 10 seconds
+  /// Reset auto-dispose timer
   void _resetTimer() {
     _inactiveTimer?.cancel();
     _inactiveTimer = Timer.periodic(autoDisposeInterval, (timer) {
@@ -245,13 +207,13 @@ abstract class IsolateHelper<T> {
     });
   }
 
-  /// Dispose the isolate
+  /// Dispose isolate resources
   Future<void> dispose() async {
     if (!_isIsolateSpawn) return;
     _isIsolateSpawn = false;
     _isolate.kill();
     _receivePort.close();
+    _cache?.clear();
+    _cache = null;
   }
-
-  Stream<dynamic> get messages;
 }

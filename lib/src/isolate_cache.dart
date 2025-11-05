@@ -44,18 +44,17 @@ class IsolateCache<K, V> {
   void set(K key, V value, {Duration? ttl}) {
     final entry = _CacheEntry(
       value: value,
-      expirationTime: _calculateExpirationTime(ttl),
+      expirationTime: _calculateExpirationTime(ttl ?? defaultTtl),
     );
     _cache[key] = entry;
+    evictExpiredEntries();
   }
 
-  bool containsKey(K key) {
-    throw UnimplementedError();
-  }
+  bool containsKey(K key) => _cache.containsKey(key);
 
   void remove(K key) => _cache.remove(key);
 
-  void get clear => _cache.clear();
+  void clear() => _cache.clear();
 
   /// Get the value from the cache or set it if it is not present
   ///
@@ -66,7 +65,7 @@ class IsolateCache<K, V> {
     final entry = _cache[key];
     if (entry == null || entry.isExpired) {
       final value = valueFactory();
-      set(key, value, ttl: ttl);
+      set(key, value, ttl: ttl ?? defaultTtl);
       return value;
     }
     return entry.value;
@@ -85,7 +84,7 @@ class IsolateCache<K, V> {
     final entry = _cache[key];
     if (entry == null || entry.isExpired) {
       final value = await valueFactory();
-      set(key, value, ttl: ttl);
+      set(key, value, ttl: ttl ?? defaultTtl);
       return value;
     }
     return entry.value;
