@@ -75,6 +75,7 @@ abstract class IsolateHelper<T> {
       if (_isIsolateSpawn) return;
 
       _receivePort = ReceivePort();
+
       final rootToken = RootIsolateToken.instance;
 
       if (rootToken == null && !isDartIsolate) {
@@ -109,6 +110,11 @@ abstract class IsolateHelper<T> {
   /// Run an isolate task and return result
   Future<T> runIsolate(dynamic args, IsolateOperation operation) async {
     Logger.d(tag, 'Running isolate: $name');
+
+    // Return cached data if available
+    final cached = _cache?.get(name);
+    if (cached != null && cached is T) return cached;
+
     await _initIsolate(operation);
 
     return _runLock.synchronized(() async {
@@ -116,13 +122,6 @@ abstract class IsolateHelper<T> {
 
       final completer = Completer<T>();
       final answerPort = ReceivePort();
-
-      // Return cached data if available
-      final cached = _cache?.get(name);
-      if (cached != null) {
-        completer.complete(cached);
-        return completer.future;
-      }
 
       _activeThread++;
       final threadId = generateThreadId(name);

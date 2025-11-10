@@ -1,13 +1,9 @@
-## 1.1.0 - 2025-06-10
+## 1.1.0 - 06/11/2025
 
-- Improved documentation (README tweaks and expanded quick start).
-- Clarified `autoDispose`, `isAutoDispose`, and custom interval usage in docs.
-- Minor internal refactor of `IsolateHelper` for better type safety.
-- Updated example with more helpers for each operation.
-- Fixed: exception details are now properly returned to callers when thrown in isolate.
-- Improved changelog formatting and release notes.
+- Integrate IsolateCache option for IsolateHelper 
 
-## 1.0.0 - 2025-06-08
+
+## 1.0.0 - 05/11/2025
 
 - Initial release.
 - Provides `IsolateHelper` for easier Dart/Flutter isolate communication.
