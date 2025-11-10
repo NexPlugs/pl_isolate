@@ -9,6 +9,7 @@ environment:
   flutter: '>=3.0.0'
 
 dependencies:
+  collection: ^1.19.1
   dart_ui_isolate: ^1.1.1
   flutter:
     sdk: flutter
