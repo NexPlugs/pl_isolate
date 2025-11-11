@@ -8,7 +8,7 @@ import 'package:synchronized/synchronized.dart';
 import 'package:nanoid/nanoid.dart';
 
 import 'isolate_logger.dart';
-import 'isolate_task_scheduling.dart';
+import 'task_queue_priority.dart';
 import 'utils/logger.dart';
 
 const _alphabet =

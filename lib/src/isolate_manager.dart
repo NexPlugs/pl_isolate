@@ -1,12 +1,28 @@
 import 'dart:async';
-
 import 'package:collection/collection.dart';
 import 'package:pl_isolate/src/utils/logger.dart';
 
 import 'isolate_helper.dart';
 import 'isolate_operation.dart';
 
-/// Isolate manager to manage isolate helpers
+class IsolateResult {
+  final dynamic result;
+  final String name;
+  final String? errorMessage;
+
+  IsolateResult({
+    required this.result,
+    required this.name,
+    this.errorMessage,
+  });
+
+  @override
+  String toString() {
+    return 'IsolateResult(result: $result, name: $name, errorMessage: $errorMessage)';
+  }
+}
+
+// Isolate manager to manage the isolates
 class IsolateManager {
   static const String tag = 'IsolateManager';
 
@@ -30,87 +46,127 @@ class IsolateManager {
   static IsolateManager get instance => _instance;
   static late final IsolateManager _instance;
 
-  final HeapPriorityQueue<IsolateHelper> _isolateQueue =
-      HeapPriorityQueue<IsolateHelper>(
-    (a, b) => a.priority.level.compareTo(b.priority.level),
+  void logInformation() {
+    Logger.i(tag, 'Queue size: ${_isolateQueue.length}');
+    Logger.i(tag, 'Running isolates: ${_runningIsolates.length}');
+    Logger.i(tag, 'Arguments: $arguments');
+    Logger.i(tag, 'Retries: $retries');
+  }
+
+  // Queue to store the isolate helpers and operations
+  final HeapPriorityQueue<(IsolateHelper, IsolateOperation)> _isolateQueue =
+      HeapPriorityQueue<(IsolateHelper, IsolateOperation)>(
+    (a, b) => a.$1.priority.level.compareTo(b.$1.priority.level),
   );
 
   late final int _maxConcurrentTasks;
   late final int _maxSizeOfQueue;
 
-  //init
-
   final List<IsolateHelper> _runningIsolates = [];
   final Map<String, dynamic> arguments = {};
-  final Map<String, IsolateOperation> operations = {};
   final Map<String, int> retries = {};
 
-  Timer? _schedulerTimer = null;
+  /// Stream to listen to the isolate result
+  final StreamController<IsolateResult> _isolateResultStream =
+      StreamController<IsolateResult>.broadcast();
 
-  /// Add the isolate helper to the manager
-  /// [isolateHelper] is the isolate helper to add
-  void addIsolateHelper(IsolateHelper isolateHelper, IsolateOperation operation,
-      dynamic arguments,
-      {Duration? delay}) {
+  /// Listen to the isolate result stream
+  /// [listener] is the function to listen to the isolate result
+  void listenIsolateResult(Function(IsolateResult) listener) {
+    _isolateResultStream.stream.listen(listener);
+  }
+
+  /// Add a new isolate helper to the queue
+  void addIsolateHelper(
+    IsolateHelper isolateHelper,
+    IsolateOperation operation,
+    dynamic args,
+  ) {
     if (_isolateQueue.length >= _maxSizeOfQueue) {
       throw Exception('Max size of queue reached');
     }
+    _isolateQueue.add((isolateHelper, operation));
 
-    _isolateQueue.add(isolateHelper);
-    arguments[isolateHelper.name] = arguments;
-    operations[isolateHelper.name] = operation;
+    arguments[operation.uniqueCode] = args;
+    retries[operation.uniqueCode] = 0;
   }
 
-  /// Remove the isolate helper from the manager
-  /// [name] is the name of the isolate helper to remove
-  void removeIsolateHelper(String name) {}
+  /// Run isolates in batches, each batch limited by [_maxConcurrentTasks]
+  Future<void> runAllInBatches() async {
+    Logger.i(
+        tag, 'Starting batch execution with max $_maxConcurrentTasks tasks.');
 
-  void startSchedulerLoop() async {
-    _schedulerTimer ??=
-        Timer.periodic(const Duration(milliseconds: 500), (_) async {
-      if (_isolateQueue.isEmpty) return;
-      if (_runningIsolates.length >= _maxConcurrentTasks) return;
-
-      final readyTask = _isolateQueue.firstWhereOrNull((t) => t.isReady);
-      if (readyTask == null) return;
-
-      _isolateQueue.remove(readyTask);
-      _runTask(readyTask);
-    });
-  }
-
-  Future<void> _runTask(IsolateHelper isolateHelper) async {
-    _runningIsolates.add(isolateHelper);
-    try {
-      final result = await isolateHelper.runIsolate(
-          arguments[isolateHelper.name], operations[isolateHelper.name]!);
-    } catch (e) {
-      Logger.e(tag, 'Error running task: $e');
-      if (isolateHelper.retryCount > 0 &&
-          retries[isolateHelper.name] != null &&
-          retries[isolateHelper.name]! < isolateHelper.retryCount) {
-        retries[isolateHelper.name] = (retries[isolateHelper.name] ?? 0) + 1;
-        _isolateQueue.add(isolateHelper);
+    while (_isolateQueue.isNotEmpty) {
+      final batch = <(IsolateHelper, IsolateOperation)>[];
+      for (int i = 0;
+          i < _maxConcurrentTasks && _isolateQueue.isNotEmpty;
+          i++) {
+        final item = _isolateQueue.removeFirst();
+        batch.add(item);
+        _runningIsolates.add(item.$1);
       }
+
+      await Future.wait(batch.map((item) async {
+        final result =
+            await runIsolate(item.$1, item.$2, arguments[item.$2.uniqueCode]!);
+
+        if (result.errorMessage == null) {}
+
+        _isolateResultStream.add(result);
+      }));
+
+      Logger.i(tag, 'Batch done ✅');
+    }
+
+    Logger.i(tag, 'All isolates completed 🎉');
+  }
+
+  /// Run a single isolate and return the result
+  Future<IsolateResult> runIsolate(IsolateHelper isolateHelper,
+      IsolateOperation operation, dynamic args) async {
+    final uniqueCode = operation.uniqueCode;
+
+    _runningIsolates.add(isolateHelper);
+
+    try {
+      final result = await isolateHelper.runIsolate(args, operation);
+
+      isolateHelper.dispose();
+
+      return IsolateResult(result: result, name: uniqueCode);
+    } catch (e, st) {
+      Logger.e(tag, 'Error running isolate ${isolateHelper.name}: $e\n$st');
+      if (isolateHelper.retryCount > 0 &&
+          (retries[uniqueCode] ?? 0) < isolateHelper.retryCount) {
+        retries[uniqueCode] = (retries[uniqueCode] ?? 0) + 1;
+        _isolateQueue.add((isolateHelper, operation));
+      } else {
+        retries.remove(uniqueCode);
+        arguments.remove(uniqueCode);
+
+        isolateHelper.dispose();
+      }
+
+      return IsolateResult(
+          result: null, name: isolateHelper.name, errorMessage: e.toString());
     } finally {
       _runningIsolates.remove(isolateHelper);
-
-      // Remove all map data
-      retries.remove(isolateHelper.name);
-      arguments.remove(isolateHelper.name);
-      operations.remove(isolateHelper.name);
     }
   }
 
   /// Dispose all the isolate helpers
   void disposeAll() {
     while (_isolateQueue.isNotEmpty) {
-      final isolateHelper = _isolateQueue.removeFirst();
+      final (isolateHelper, operation) = _isolateQueue.removeFirst();
+      isolateHelper.dispose();
+    }
+    for (var isolateHelper in _runningIsolates) {
       isolateHelper.dispose();
     }
     _runningIsolates.clear();
     arguments.clear();
-    operations.clear();
     retries.clear();
+
+    _isolateResultStream.close();
   }
 }

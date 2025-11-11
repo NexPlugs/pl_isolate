@@ -4,7 +4,7 @@ import 'dart:async';
 import 'package:pl_isolate/pl_isolate.dart';
 
 // Example operation 1: Count operation
-class CountableIsolateOperation implements IsolateOperation {
+class CountableIsolateOperation extends IsolateOperation {
   @override
   String get tag => 'count';
 
@@ -22,7 +22,7 @@ class CountableIsolateOperation implements IsolateOperation {
 }
 
 // Example operation 2: Calculate sum
-class SumIsolateOperation implements IsolateOperation {
+class SumIsolateOperation extends IsolateOperation {
   @override
   String get tag => 'sum';
 
@@ -42,7 +42,7 @@ class SumIsolateOperation implements IsolateOperation {
 }
 
 // Example operation 3: Simulate async work with delay
-class DelayIsolateOperation implements IsolateOperation {
+class DelayIsolateOperation extends IsolateOperation {
   @override
   String get tag => 'delay';
 
@@ -58,7 +58,7 @@ class DelayIsolateOperation implements IsolateOperation {
 }
 
 // Example operation 4: Error handling
-class ErrorIsolateOperation implements IsolateOperation {
+class ErrorIsolateOperation extends IsolateOperation {
   @override
   String get tag => 'error';
 
