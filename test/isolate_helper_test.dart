@@ -3,9 +3,6 @@ import 'package:pl_isolate/pl_isolate.dart';
 
 class CountableIsolateOperation extends IsolateOperation {
   @override
-  String get uniqueCode => 'count';
-
-  @override
   String get tag => 'count';
   @override
   Future<dynamic> run(dynamic args) async {
