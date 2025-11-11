@@ -118,6 +118,80 @@ class _MyWidgetState extends State<MyWidget> {
 }
 ```
 
+## Managing Multiple Tasks with `IsolateManager`
+
+When you need to queue different helpers and execute them with concurrency limits, use `IsolateManager`.
+
+### 1. Initialize the Manager
+
+```dart
+void main() {
+  // Allow 2 concurrent tasks and up to 10 queued jobs.
+  IsolateManager.init(2, 10);
+  runApp(const MyApp());
+}
+```
+
+### 2. Add Tasks to the Queue
+
+```dart
+void scheduleTasks() {
+  final manager = IsolateManager.instance;
+
+  manager.addIsolateHelper(
+    MyIsolateHelper(),
+    MyCalculationOperation(),
+    1000000,
+  );
+
+  manager.addIsolateHelper(
+    OtherHelper(),
+    OtherOperation(),
+    {'duration': 2000},
+  );
+}
+```
+
+Each call enqueues the helper/operation pair along with its arguments. You can enqueue as many as `maxSizeOfQueue`.
+
+### 3. Listen for Results (Optional)
+
+```dart
+@override
+void initState() {
+  super.initState();
+  IsolateManager.instance.listenIsolateResult((IsolateResult result) {
+    if (result.errorMessage != null) {
+      debugPrint('Task ${result.name} failed: ${result.errorMessage}');
+    } else {
+      debugPrint('Task ${result.name} completed: ${result.result}');
+    }
+  });
+}
+```
+
+### 4. Run the Batch
+
+```dart
+Future<void> runQueue() async {
+  await IsolateManager.instance.runAllInBatches();
+}
+```
+
+The manager executes the queue in batches, honoring the `maxConcurrentTasks` limit. Results are pushed through the listener as each task finishes.
+
+### 5. Clean Up
+
+Call `disposeAll()` when you are done to release helpers left in the queue or running list.
+
+```dart
+@override
+void dispose() {
+  IsolateManager.instance.disposeAll();
+  super.dispose();
+}
+```
+
 ## Complete Example
 
 Here's a complete example showing multiple operations:

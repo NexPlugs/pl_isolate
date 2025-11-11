@@ -120,7 +120,7 @@ class IsolateManager {
 
       await Future.wait(batch.map((item) async {
         final result =
-            await runIsolate(item.$1, item.$2, arguments[item.$2.uniqueCode]!);
+            await runIsolate(item.$1, item.$2, arguments[item.$2.uniqueCode]);
 
         if (result.errorMessage == null) {}
 

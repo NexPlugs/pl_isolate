@@ -165,12 +165,39 @@ class _MyAppState extends State<MyApp> {
   bool _errorLoading = false;
   String? _errorError;
 
+  late final IsolateManager _isolateManager;
+  bool _managerRunning = false;
+  String _managerStatus = 'Queue idle';
+  String? _managerError;
+  final List<String> _managerLogs = [];
+  int _managerBatchCounter = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _isolateManager = IsolateManager.isInitialized
+        ? IsolateManager.instance
+        : IsolateManager.init(2, 12);
+
+    _isolateManager.listenIsolateResult((IsolateResult result) {
+      if (!mounted) return;
+      final logEntry = result.errorMessage != null
+          ? '❌ ${result.name}: ${result.errorMessage}'
+          : '✅ ${result.name}: ${result.result}';
+      setState(() {
+        _managerStatus = 'Last result from ${result.name}';
+        _managerLogs.insert(0, logEntry);
+      });
+    });
+  }
+
   @override
   void dispose() {
     _countHelper.dispose();
     _sumHelper.dispose();
     _delayHelper.dispose();
     _errorHelper.dispose();
+    _isolateManager.disposeAll();
     super.dispose();
   }
 
@@ -287,6 +314,83 @@ class _MyAppState extends State<MyApp> {
         _errorLoading = false;
       });
     }
+  }
+
+  Future<void> _runManagerBatch() async {
+    if (_managerRunning) return;
+
+    setState(() {
+      _managerRunning = true;
+      _managerError = null;
+      _managerStatus = 'Preparing batch...';
+    });
+
+    final batchId = ++_managerBatchCounter;
+    final tasks = [
+      (
+        CountIsolateHelper(),
+        CountableIsolateOperation(),
+        3000000,
+        'Count to 3,000,000',
+      ),
+      (
+        SumIsolateHelper(),
+        SumIsolateOperation(),
+        List.generate(500000, (i) => i),
+        'Sum 500,000 numbers',
+      ),
+      (
+        DelayIsolateHelper(),
+        DelayIsolateOperation(),
+        {'duration': 1500},
+        'Delay for 1.5s',
+      ),
+      (ErrorIsolateHelper(), ErrorIsolateOperation(), null, 'Simulate error'),
+    ];
+
+    try {
+      for (final task in tasks) {
+        _isolateManager.addIsolateHelper(task.$1, task.$2, task.$3);
+        if (mounted) {
+          setState(() {
+            _managerLogs.insert(0, '📝 Batch $batchId scheduled: ${task.$4}');
+          });
+        } else {
+          _managerLogs.insert(0, '📝 Batch $batchId scheduled: ${task.$4}');
+        }
+      }
+
+      setState(() {
+        _managerStatus = 'Running batch $batchId with ${tasks.length} tasks';
+      });
+
+      await _isolateManager.runAllInBatches();
+
+      setState(() {
+        _managerStatus = 'Batch $batchId completed';
+      });
+    } catch (e) {
+      setState(() {
+        _managerError = 'Error running manager batch: $e';
+        _managerStatus = 'Batch $batchId failed';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _managerRunning = false;
+        });
+      } else {
+        _managerRunning = false;
+      }
+    }
+  }
+
+  void _clearManagerLogs() {
+    setState(() {
+      _managerLogs.clear();
+      _managerStatus = 'Queue idle';
+      _managerError = null;
+    });
   }
 
   Widget _buildOperationCard(
@@ -449,6 +553,140 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  Widget _buildManagerCard(BuildContext context) {
+    final logsToDisplay = _managerLogs.take(10).toList();
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Isolate Manager Demo',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _managerRunning
+                        ? Colors.blue.shade100
+                        : Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _managerRunning ? 'Running' : 'Idle',
+                    style: TextStyle(
+                      color: _managerRunning
+                          ? Colors.blue.shade900
+                          : Colors.grey.shade700,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _managerStatus,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade700),
+            ),
+            if (_managerError != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _managerError!,
+                  style: TextStyle(color: Colors.red.shade900, fontSize: 12),
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: logsToDisplay.isEmpty
+                  ? const Text(
+                      'No manager activity yet. Press "Run manager batch" to queue demo tasks.',
+                      style: TextStyle(fontSize: 12),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Latest results (newest first):',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        for (final log in logsToDisplay)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: SelectableText(
+                              log,
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _managerRunning ? null : _runManagerBatch,
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Run manager batch'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed:
+                      (!_managerRunning &&
+                          _managerLogs.isEmpty &&
+                          _managerError == null)
+                      ? null
+                      : _clearManagerLogs,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reset'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -550,6 +788,10 @@ class _MyAppState extends State<MyApp> {
                 },
                 buttonColor: Colors.orange,
               ),
+
+              const SizedBox(height: 16),
+
+              _buildManagerCard(context),
 
               const SizedBox(height: 16),
 
