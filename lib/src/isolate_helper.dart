@@ -8,6 +8,7 @@ import 'package:synchronized/synchronized.dart';
 import 'package:nanoid/nanoid.dart';
 
 import 'isolate_logger.dart';
+import 'task_queue_priority.dart';
 import 'utils/logger.dart';
 
 const _alphabet =
@@ -50,6 +51,10 @@ abstract class IsolateHelper<T> {
   bool get isAutoDispose;
   bool get isDartIsolate;
   String get name;
+
+  int get retryCount => 3;
+
+  TaskQueuePriority get priority => TaskQueuePriority.medium;
 
   Duration get autoDisposeInterval => const Duration(seconds: 10);
   int? get maxCacheEntries => null;

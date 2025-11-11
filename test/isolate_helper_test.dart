@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pl_isolate/pl_isolate.dart';
 
-class CountableIsolateOperation implements IsolateOperation {
+class CountableIsolateOperation extends IsolateOperation {
   @override
   String get tag => 'count';
   @override
@@ -59,5 +59,23 @@ void main() {
     } catch (e) {
       expect(e, isA<Exception>());
     }
+  });
+
+  test('IsolateManager test', () async {
+    final isolateManager = IsolateManager.init(2, 10);
+
+    isolateManager.listenIsolateResult((result) {
+      print('Isolate result: ${result.result}');
+    });
+    isolateManager.addIsolateHelper(
+        CountableIsolateHelper(), CountableIsolateOperation(), 2000);
+    isolateManager.addIsolateHelper(
+        CountableIsolateHelper(), CountableIsolateOperation(), 3000);
+    isolateManager.addIsolateHelper(
+        CountableIsolateHelper(), CountableIsolateOperation(), 4000);
+
+    isolateManager.logInformation();
+
+    await isolateManager.runAllInBatches();
   });
 }
