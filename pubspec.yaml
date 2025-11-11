@@ -1,6 +1,6 @@
 name: pl_isolate
 description: "A library to help with isolate communication."
-version: 1.0.1
+version: 1.2.1
 homepage: https://github.com/NexPlugs/pl_isolate
 repository: https://github.com/NexPlugs/pl_isolate
 

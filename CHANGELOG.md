@@ -1,3 +1,7 @@
+## 1.2.1 - 11/11/2025
+- Implement IsolateManager 
+- Fix cann't return cache data
+
 ## 1.1.0 - 06/11/2025
 
 - Integrate IsolateCache option for IsolateHelper 
