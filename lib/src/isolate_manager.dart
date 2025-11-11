@@ -32,19 +32,32 @@ class IsolateManager {
   })  : _maxConcurrentTasks = maxConcurrentTasks,
         _maxSizeOfQueue = maxSizeOfQueue;
 
+  // Initialize the isolate manager
   factory IsolateManager.init(
     int maxConcurrentTasks,
     int maxSizeOfQueue,
   ) {
-    _instance = IsolateManager._(
+    final instance = IsolateManager._(
       maxConcurrentTasks: maxConcurrentTasks,
       maxSizeOfQueue: maxSizeOfQueue,
     );
-    return _instance;
+    _instance = instance;
+    return instance;
   }
 
-  static IsolateManager get instance => _instance;
-  static late final IsolateManager _instance;
+  // Get the isolate manager instance
+  static IsolateManager get instance {
+    final instance = _instance;
+    if (instance == null) {
+      throw StateError(
+        'IsolateManager has not been initialized. Call IsolateManager.init() first.',
+      );
+    }
+    return instance;
+  }
+
+  static IsolateManager? _instance;
+  static bool get isInitialized => _instance != null;
 
   void logInformation() {
     Logger.i(tag, 'Queue size: ${_isolateQueue.length}');
@@ -103,7 +116,6 @@ class IsolateManager {
           i++) {
         final item = _isolateQueue.removeFirst();
         batch.add(item);
-        _runningIsolates.add(item.$1);
       }
 
       await Future.wait(batch.map((item) async {
@@ -132,6 +144,8 @@ class IsolateManager {
       final result = await isolateHelper.runIsolate(args, operation);
 
       isolateHelper.dispose();
+      arguments.remove(uniqueCode);
+      retries.remove(uniqueCode);
 
       return IsolateResult(result: result, name: uniqueCode);
     } catch (e, st) {
