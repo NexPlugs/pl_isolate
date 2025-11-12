@@ -11,3 +11,4 @@ export 'src/isolate_manager.dart';
 export 'src/isolate_cache.dart';
 export 'src/isolate_operation.dart';
 export 'src/task_queue_priority.dart';
+export 'src/utils/transferable_parse.dart';

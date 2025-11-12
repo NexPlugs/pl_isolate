@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:isolate';
 import 'package:dart_ui_isolate/dart_ui_isolate.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:pl_isolate/src/isolate_cache.dart';
 import 'package:pl_isolate/src/isolate_operation.dart';
@@ -10,6 +11,7 @@ import 'package:nanoid/nanoid.dart';
 import 'isolate_logger.dart';
 import 'task_queue_priority.dart';
 import 'utils/logger.dart';
+import 'utils/transferable_parse.dart';
 
 const _alphabet =
     '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
@@ -64,6 +66,22 @@ abstract class IsolateHelper<T> {
 
   bool get isIsolateSpawn => _isIsolateSpawn;
 
+  ///LifeCycle callbacks
+  @protected
+  Future<void> onStart() async {
+    Logger.i(tag, 'Isolate started: $name');
+  }
+
+  @protected
+  Future<void> onCancel(String reason) async {
+    Logger.i(tag, 'Isolate canceled: $name');
+  }
+
+  @protected
+  Future<void> onDispose() async {
+    Logger.i(tag, 'Isolate disposed: $name');
+  }
+
   /// Lazy cache initialization
   IsolateCache<String, dynamic>? get cache {
     if (_cache == null &&
@@ -73,6 +91,7 @@ abstract class IsolateHelper<T> {
         defaultTtl: defaultCacheTtl,
       );
     }
+
     return _cache;
   }
 
@@ -90,6 +109,7 @@ abstract class IsolateHelper<T> {
         throw Exception('Root isolate token is not set');
       }
 
+      await onStart();
       try {
         if (isDartIsolate) {
           _isolate = await DartUiIsolate.spawn<List<dynamic>>(
@@ -107,9 +127,11 @@ abstract class IsolateHelper<T> {
         _mainSendPort = await _receivePort.first as SendPort;
         _isIsolateSpawn = true;
       } catch (e) {
-        Logger.e(tag, 'Error initializing isolate: $e');
+        final errorMessage = 'Error initializing isolate: $e';
+        Logger.e(tag, errorMessage);
+
+        await onCancel(errorMessage);
         _isIsolateSpawn = false;
-        throw Exception('Error initializing isolate: $e');
       }
     });
   }
@@ -145,7 +167,8 @@ abstract class IsolateHelper<T> {
           return;
         }
 
-        final result = message[1];
+        /// Convert the result to the original type if it is transferable
+        final result = TransferableParse.fromTransferable(message[1]);
         final exception = message[2];
 
         if (exception != null) {
@@ -190,7 +213,10 @@ abstract class IsolateHelper<T> {
         try {
           _isHandling = true;
           final result = await operation.run(args);
-          answerPort.send([threadId, result, null]);
+
+          /// If the result is a large data, convert it to transferable to avoid memory overflow
+          final parsedResult = TransferableParse.toTransferable(result);
+          answerPort.send([threadId, parsedResult, null]);
         } catch (exception) {
           IsolateLogger.instance
               .error(tag, 'Error in operation: $exception', exception);
@@ -207,11 +233,11 @@ abstract class IsolateHelper<T> {
   /// Reset auto-dispose timer
   void _resetTimer() {
     _inactiveTimer?.cancel();
-    _inactiveTimer = Timer.periodic(autoDisposeInterval, (timer) {
+    _inactiveTimer = Timer.periodic(autoDisposeInterval, (timer) async {
       if (_activeThread > 0 || _isHandling) {
         _resetTimer();
       } else {
-        dispose();
+        await dispose();
       }
     });
   }
@@ -219,10 +245,16 @@ abstract class IsolateHelper<T> {
   /// Dispose isolate resources
   Future<void> dispose() async {
     if (!_isIsolateSpawn) return;
-    _isIsolateSpawn = false;
-    _isolate.kill();
-    _receivePort.close();
-    _cache?.clear();
-    _cache = null;
+    try {
+      _isIsolateSpawn = false;
+      _isolate.kill();
+      _receivePort.close();
+      _cache?.clear();
+      _cache = null;
+    } catch (e) {
+      Logger.e(tag, 'Error disposing isolate: $e');
+    } finally {
+      await onDispose();
+    }
   }
 }

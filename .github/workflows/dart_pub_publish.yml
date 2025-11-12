@@ -35,46 +35,46 @@ jobs:
         run: |
           flutter test
 
-      - name: Prepare release artifacts
-        id: release
-        run: |
-          NEW_VERSION=$(dart run tool/release_isolate_helper.dart)
-          echo "release_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+      # - name: Prepare release artifacts
+      #   id: release
+      #   run: |
+      #     NEW_VERSION=$(dart run tool/release_isolate_helper.dart)
+      #     echo "release_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Commit release changes
-        id: commit
-        run: |
-          if [[ -n "$(git status --porcelain)" ]]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add CHANGELOG.md pubspec.yaml
-            git commit -m "chore(isolate_helper): release v${{ steps.release.outputs.release_version }}"
-            echo "committed=true" >> $GITHUB_OUTPUT
-          else
-            echo "committed=false" >> $GITHUB_OUTPUT
-          fi
+      # - name: Commit release changes
+      #   id: commit
+      #   run: |
+      #     if [[ -n "$(git status --porcelain)" ]]; then
+      #       git config user.name "github-actions[bot]"
+      #       git config user.email "github-actions[bot]@users.noreply.github.com"
+      #       git add CHANGELOG.md pubspec.yaml
+      #       git commit -m "chore(isolate_helper): release v${{ steps.release.outputs.release_version }}"
+      #       echo "committed=true" >> $GITHUB_OUTPUT
+      #     else
+      #       echo "committed=false" >> $GITHUB_OUTPUT
+      #     fi
 
-      - name: Push release commit
-        if: steps.commit.outputs.committed == 'true'
-        run: |
-          git push origin HEAD:${GITHUB_REF}
+      # - name: Push release commit
+      #   if: steps.commit.outputs.committed == 'true'
+      #   run: |
+      #     git push origin HEAD:${GITHUB_REF}
 
-      - name: Create release tag
-        if: steps.commit.outputs.committed == 'true'
-        run: |
-          git tag isolate_helper-v${{ steps.release.outputs.release_version }}
-          git push origin isolate_helper-v${{ steps.release.outputs.release_version }}
+      # - name: Create release tag
+      #   if: steps.commit.outputs.committed == 'true'
+      #   run: |
+      #     git tag isolate_helper-v${{ steps.release.outputs.release_version }}
+      #     git push origin isolate_helper-v${{ steps.release.outputs.release_version }}
 
-      - name: Publish isolate_helper to pub.dev
-        if: steps.commit.outputs.committed == 'true'
-        env:
-          PUB_CREDENTIALS: ${{ secrets.PUB_CREDENTIALS }}
-        run: |
-          if [ -z "$PUB_CREDENTIALS" ]; then
-            echo "PUB_CREDENTIALS secret is not set."
-            exit 1
-          fi
-          mkdir -p ~/.config/dart
-          printf '%s' "$PUB_CREDENTIALS" > ~/.config/dart/pub-credentials.json
-          dart pub publish --force
+      # - name: Publish isolate_helper to pub.dev
+      #   if: steps.commit.outputs.committed == 'true'
+      #   env:
+      #     PUB_CREDENTIALS: ${{ secrets.PUB_CREDENTIALS }}
+      #   run: |
+      #     if [ -z "$PUB_CREDENTIALS" ]; then
+      #       echo "PUB_CREDENTIALS secret is not set."
+      #       exit 1
+      #     fi
+      #     mkdir -p ~/.config/dart
+      #     printf '%s' "$PUB_CREDENTIALS" > ~/.config/dart/pub-credentials.json
+      #     dart pub publish --force
 
