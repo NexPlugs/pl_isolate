@@ -46,6 +46,8 @@ abstract class IsolateHelper<T> {
   bool _isIsolateSpawn = false;
   int _activeThread = 0;
 
+  static bool _isHandling = false;
+
   /// Configurations
   bool get autoDispose => true;
   bool get isAutoDispose;
@@ -186,12 +188,15 @@ abstract class IsolateHelper<T> {
 
       if (action.startsWith(operation.tag)) {
         try {
+          _isHandling = true;
           final result = await operation.run(args);
           answerPort.send([threadId, result, null]);
         } catch (exception) {
           IsolateLogger.instance
               .error(tag, 'Error in operation: $exception', exception);
           answerPort.send([threadId, null, exception]);
+        } finally {
+          _isHandling = false;
         }
       } else {
         IsolateLogger.instance.error(tag, 'Unknown action: $action', null);
@@ -203,7 +208,7 @@ abstract class IsolateHelper<T> {
   void _resetTimer() {
     _inactiveTimer?.cancel();
     _inactiveTimer = Timer.periodic(autoDisposeInterval, (timer) {
-      if (_activeThread > 0) {
+      if (_activeThread > 0 || _isHandling) {
         _resetTimer();
       } else {
         dispose();

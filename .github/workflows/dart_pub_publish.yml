@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'isolate_helper/**'
 
 permissions:
   contents: write
