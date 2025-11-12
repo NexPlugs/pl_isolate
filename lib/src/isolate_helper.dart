@@ -233,11 +233,11 @@ abstract class IsolateHelper<T> {
   /// Reset auto-dispose timer
   void _resetTimer() {
     _inactiveTimer?.cancel();
-    _inactiveTimer = Timer.periodic(autoDisposeInterval, (timer) {
+    _inactiveTimer = Timer.periodic(autoDisposeInterval, (timer) async {
       if (_activeThread > 0 || _isHandling) {
         _resetTimer();
       } else {
-        if (!_isHandling) dispose();
+        await dispose();
       }
     });
   }
