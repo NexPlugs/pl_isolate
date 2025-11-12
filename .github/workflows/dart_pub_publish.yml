@@ -1,312 +1,82 @@
-name: Flutter CI/CD
+name: Release isolate_helper
 
 on:
   push:
     branches:
       - main
-      - develop
-      - staging
-      - release/**
-  pull_request:
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: "Target environment"
-        required: false
-        type: choice
-        options:
-          - dev
-          - stg
-          - prod
-        default: dev
-      bump:
-        description: "Release bump type"
-        required: false
-        type: choice
-        options:
-          - none
-          - patch
-          - minor
-          - major
-        default: patch
+    paths:
+      - 'isolate_helper/**'
 
-concurrency:
-  group: flutter-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: write
 
 jobs:
-  context:
+  publish:
+    if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
-    outputs:
-      environment: ${{ steps.select.outputs.environment }}
-      deploy_android: ${{ steps.select.outputs.deploy_android }}
-      deploy_ios: ${{ steps.select.outputs.deploy_ios }}
-      bump: ${{ steps.select.outputs.bump }}
-      android_track: ${{ steps.select.outputs.android_track }}
-      ios_distribute_external: ${{ steps.select.outputs.ios_distribute_external }}
-      release_owner: ${{ steps.select.outputs.release_owner }}
-    steps:
-      - id: select
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          REF_NAME: ${{ github.ref_name }}
-          INPUT_ENV: ${{ github.event.inputs.environment }}
-          INPUT_BUMP: ${{ github.event.inputs.bump }}
+    defaults:
+      run:
         shell: bash
-        run: |
-          if [[ -n "$INPUT_ENV" ]]; then
-            ENVIRONMENT="$INPUT_ENV"
-          else
-            case "$REF_NAME" in
-              main)
-                ENVIRONMENT="prod"
-                ;;
-              staging|release/*)
-                ENVIRONMENT="stg"
-                ;;
-              *)
-                ENVIRONMENT="dev"
-                ;;
-            esac
-          fi
 
-          if [[ -z "$ENVIRONMENT" ]]; then
-            ENVIRONMENT="dev"
-          fi
-          echo "environment=$ENVIRONMENT" >> "$GITHUB_OUTPUT"
-
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            DEPLOY_ANDROID="false"
-            DEPLOY_IOS="false"
-          else
-            DEPLOY_ANDROID="true"
-            DEPLOY_IOS="true"
-          fi
-          echo "deploy_android=$DEPLOY_ANDROID" >> "$GITHUB_OUTPUT"
-          echo "deploy_ios=$DEPLOY_IOS" >> "$GITHUB_OUTPUT"
-
-          if [[ -n "$INPUT_BUMP" && "$INPUT_BUMP" != "" ]]; then
-            BUMP="$INPUT_BUMP"
-          elif [[ "$ENVIRONMENT" == "prod" ]]; then
-            BUMP="patch"
-          else
-            BUMP="none"
-          fi
-          echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
-
-          case "$ENVIRONMENT" in
-            prod)
-              echo "android_track=production" >> "$GITHUB_OUTPUT"
-              echo "ios_distribute_external=true" >> "$GITHUB_OUTPUT"
-              ;;
-            stg)
-              echo "android_track=internal" >> "$GITHUB_OUTPUT"
-              echo "ios_distribute_external=false" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "android_track=internal" >> "$GITHUB_OUTPUT"
-              echo "ios_distribute_external=false" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
-
-          if [[ "$DEPLOY_ANDROID" == "true" ]]; then
-            RELEASE_OWNER="android"
-          elif [[ "$DEPLOY_IOS" == "true" ]]; then
-            RELEASE_OWNER="ios"
-          else
-            RELEASE_OWNER="none"
-          fi
-          echo "release_owner=$RELEASE_OWNER" >> "$GITHUB_OUTPUT"
-
-  lint_test:
-    runs-on: macos-14
-    needs: context
-    env:
-      FLUTTER_VERSION: "3.24.0"
-      ENVIRONMENT: ${{ needs.context.outputs.environment }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Setup Flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-
-      - name: Cache pub dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.pub-cache
-            build
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: ${{ runner.os }}-pub-
 
       - name: Install dependencies
-        run: flutter pub get
-
-      - name: Flutter analyze
-        run: flutter analyze
-
-      - name: Run tests with coverage
-        run: flutter test --coverage --dart-define=env=${ENVIRONMENT}
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ github.run_id }}
-          path: coverage/lcov.info
-          if-no-files-found: ignore
-
-  build_android:
-    runs-on: macos-14
-    needs:
-      - context
-      - lint_test
-    if: needs.context.outputs.deploy_android == 'true'
-    env:
-      FLUTTER_VERSION: "3.24.0"
-      ENVIRONMENT: ${{ needs.context.outputs.environment }}
-      ANDROID_TRACK: ${{ needs.context.outputs.android_track }}
-      ANDROID_PACKAGE_NAME: com.whisperzone.app
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-
-      - name: Cache pub dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.pub-cache
-            build
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: ${{ runner.os }}-pub-
-
-      - name: Install Flutter packages
-        run: flutter pub get
-
-      - name: Install gems
-        run: bundle install
-
-      - name: Validate Android secrets
         run: |
-          test -n "${{ secrets.KEYSTORE_BASE64 }}" || { echo 'KEYSTORE_BASE64 secret missing'; exit 1; }
-          test -n "${{ secrets.GOOGLE_PLAY_KEY }}" || { echo 'GOOGLE_PLAY_KEY secret missing'; exit 1; }
-          test -n "${{ secrets.KEYSTORE_PASSWORD }}" || { echo 'KEYSTORE_PASSWORD secret missing'; exit 1; }
-          test -n "${{ secrets.KEY_ALIAS }}" || { echo 'KEY_ALIAS secret missing'; exit 1; }
-          test -n "${{ secrets.KEY_PASSWORD }}" || { echo 'KEY_PASSWORD secret missing'; exit 1; }
+          flutter pub get
 
-      - name: Materialize signing assets
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          GOOGLE_PLAY_KEY: ${{ secrets.GOOGLE_PLAY_KEY }}
-        shell: bash
+      - name: Run unit tests
         run: |
-          mkdir -p android/keystore fastlane
-          echo "$KEYSTORE_BASE64" | base64 --decode > android/keystore/upload-keystore.jks
-          cat > android/key.properties <<EOF
-# storePassword=$KEYSTORE_PASSWORD
-# keyPassword=$KEY_PASSWORD
-# keyAlias=$KEY_ALIAS
-# storeFile=keystore/upload-keystore.jks
-# EOF
-#           printf '%s' "$GOOGLE_PLAY_KEY" > fastlane/google-play-key.json
+          flutter test
 
-      - name: Export Firebase options
-        if: ${{ env.FIREBASE_OPTIONS && env.FIREBASE_OPTIONS != '' }}
-        env:
-          FIREBASE_OPTIONS: ${{ env.FIREBASE_OPTIONS }}
+      - name: Prepare release artifacts
+        id: release
         run: |
-          mkdir -p env
-          printf '%s' "$FIREBASE_OPTIONS" > env/firebase_options.${ENVIRONMENT}.json
-          mkdir -p env
+          NEW_VERSION=$(dart run tool/release_isolate_helper.dart)
+          echo "release_version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-          printf '%s' "$FIREBASE_OPTIONS" > env/firebase_options.${ENVIRONMENT}.json
-
-      - name: Prepare release metadata
-        if: ${{ needs.context.outputs.bump != 'none' && needs.context.outputs.release_owner == 'android' }}
-        run: bundle exec fastlane prepare_release bump:${{ needs.context.outputs.bump }}
-
-      - name: Deploy Android bundle
-        run: bundle exec fastlane android deploy_internal env=${ENVIRONMENT} track=${ANDROID_TRACK}
-        env:
-          GOOGLE_PLAY_JSON_KEY_PATH: ${{ github.workspace }}/fastlane/google-play-key.json
-          ANDROID_PACKAGE_NAME: ${{ env.ANDROID_PACKAGE_NAME }}
-
-  build_ios:
-    runs-on: macos-14
-    needs:
-      - context
-      - lint_test
-    if: needs.context.outputs.deploy_ios == 'true'
-    env:
-      FLUTTER_VERSION: "3.24.0"
-      ENVIRONMENT: ${{ needs.context.outputs.environment }}
-      IOS_APP_IDENTIFIER: com.whisperzone.app
-      IOS_DISTRIBUTE_EXTERNAL: ${{ needs.context.outputs.ios_distribute_external }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-
-      - name: Cache pub dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.pub-cache
-            build
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: ${{ runner.os }}-pub-
-
-      - name: Install Flutter packages
-        run: flutter pub get
-
-      - name: Install gems
-        run: bundle install
-
-      - name: Validate Apple secrets
+      - name: Commit release changes
+        id: commit
         run: |
-          test -n "${{ secrets.APP_STORE_CONNECT_KEY }}" || { echo 'APP_STORE_CONNECT_KEY secret missing'; exit 1; }
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add CHANGELOG.md pubspec.yaml
+            git commit -m "chore(isolate_helper): release v${{ steps.release.outputs.release_version }}"
+            echo "committed=true" >> $GITHUB_OUTPUT
+          else
+            echo "committed=false" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Materialize App Store Connect API key
-        env:
-          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
-        shell: bash
+      - name: Push release commit
+        if: steps.commit.outputs.committed == 'true'
         run: |
-          mkdir -p fastlane ios/fastlane
-          echo "$APP_STORE_CONNECT_KEY" | base64 --decode > fastlane/AppStoreConnect_APIKey.json
+          git push origin HEAD:${GITHUB_REF}
 
-      - name: Prepare release metadata
-        if: ${{ needs.context.outputs.bump != 'none' && needs.context.outputs.release_owner == 'ios' }}
-        run: bundle exec fastlane prepare_release bump:${{ needs.context.outputs.bump }}
+      - name: Create release tag
+        if: steps.commit.outputs.committed == 'true'
+        run: |
+          git tag isolate_helper-v${{ steps.release.outputs.release_version }}
+          git push origin isolate_helper-v${{ steps.release.outputs.release_version }}
 
-      - name: Deploy to TestFlight
-        run: bundle exec fastlane ios beta env=${ENVIRONMENT} distribute_external=${IOS_DISTRIBUTE_EXTERNAL}
+      - name: Publish isolate_helper to pub.dev
+        if: steps.commit.outputs.committed == 'true'
         env:
-          APP_STORE_CONNECT_API_KEY_PATH: ${{ github.workspace }}/fastlane/AppStoreConnect_APIKey.json
-          IOS_APP_IDENTIFIER: ${{ env.IOS_APP_IDENTIFIER }}
+          PUB_CREDENTIALS: ${{ secrets.PUB_CREDENTIALS }}
+        run: |
+          if [ -z "$PUB_CREDENTIALS" ]; then
+            echo "PUB_CREDENTIALS secret is not set."
+            exit 1
+          fi
+          mkdir -p ~/.config/dart
+          printf '%s' "$PUB_CREDENTIALS" > ~/.config/dart/pub-credentials.json
+          dart pub publish --force
+
