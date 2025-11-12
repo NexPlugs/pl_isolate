@@ -11,6 +11,7 @@ import 'package:nanoid/nanoid.dart';
 import 'isolate_logger.dart';
 import 'task_queue_priority.dart';
 import 'utils/logger.dart';
+import 'utils/transferable_parse.dart';
 
 const _alphabet =
     '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
@@ -166,7 +167,8 @@ abstract class IsolateHelper<T> {
           return;
         }
 
-        final result = message[1];
+        /// Convert the result to the original type if it is transferable
+        final result = TransferableParse.fromTransferable(message[1]);
         final exception = message[2];
 
         if (exception != null) {
@@ -211,7 +213,10 @@ abstract class IsolateHelper<T> {
         try {
           _isHandling = true;
           final result = await operation.run(args);
-          answerPort.send([threadId, result, null]);
+
+          /// If the result is a large data, convert it to transferable to avoid memory overflow
+          final parsedResult = TransferableParse.toTransferable(result);
+          answerPort.send([threadId, parsedResult, null]);
         } catch (exception) {
           IsolateLogger.instance
               .error(tag, 'Error in operation: $exception', exception);
