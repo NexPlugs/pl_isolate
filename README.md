@@ -15,6 +15,7 @@ A powerful Flutter plugin that simplifies isolate communication and management. 
 - 📊 **Multiple Isolates**: Each operation can have its own isolate helper
 - 🎨 **UI Isolate Support**: Support for both Dart isolates and UI isolates
 - ⚡ **Performance**: Run CPU-intensive tasks without blocking the main thread
+- 📦 **Transferable Data for Large Payloads**: Efficient support for sending/receiving large data between isolates using Dart's transferable objects
 
 ## Installation
 

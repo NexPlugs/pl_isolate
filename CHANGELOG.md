@@ -1,8 +1,7 @@
-## 1.2.2 - 12/11/2025
+## 1.3.3 - 12/11/2025
+- Add lifecycle callbacks to IsolateHelper.
+- Export transferable parsing helpers.
 
-- Automated release triggered by 857ab99.
-
-- Changes: https://github.com/NexPlugs/pl_isolate/commit/857ab99306b329e41232347d7832e954088139be
 
 ## 1.2.1 - 11/11/2025
 - Implement IsolateManager 
