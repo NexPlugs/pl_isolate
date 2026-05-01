@@ -17,7 +17,7 @@ class IsolateLog {
 }
 
 /// Isolate logger to log messages from isolate
-/// Use to log messages from isolate to main isolate
+/// Use to log messages from isolate to main isolate~
 class IsolateLogger {
   IsolateLogger._();
 

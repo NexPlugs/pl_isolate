@@ -3,7 +3,6 @@ import 'package:collection/collection.dart';
 import 'package:pl_isolate/src/utils/logger.dart';
 
 import 'isolate_helper.dart';
-import 'isolate_operation.dart';
 
 class IsolateResult {
   final dynamic result;
@@ -67,9 +66,9 @@ class IsolateManager {
   }
 
   // Queue to store the isolate helpers and operations
-  final HeapPriorityQueue<(IsolateHelper, IsolateOperation)> _isolateQueue =
-      HeapPriorityQueue<(IsolateHelper, IsolateOperation)>(
-    (a, b) => a.$1.priority.level.compareTo(b.$1.priority.level),
+  final HeapPriorityQueue<IsolateHelper> _isolateQueue =
+      HeapPriorityQueue<IsolateHelper>(
+    (a, b) => a.priority.level.compareTo(b.priority.level),
   );
 
   late final int _maxConcurrentTasks;
@@ -92,16 +91,16 @@ class IsolateManager {
   /// Add a new isolate helper to the queue
   void addIsolateHelper(
     IsolateHelper isolateHelper,
-    IsolateOperation operation,
     dynamic args,
   ) {
     if (_isolateQueue.length >= _maxSizeOfQueue) {
       throw Exception('Max size of queue reached');
     }
-    _isolateQueue.add((isolateHelper, operation));
+    final uniqCode = isolateHelper.uniqCode;
+    _isolateQueue.add((isolateHelper));
 
-    arguments[operation.uniqueCode] = args;
-    retries[operation.uniqueCode] = 0;
+    arguments[uniqCode] = args;
+    retries[uniqCode] = 0;
   }
 
   /// Run isolates in batches, each batch limited by [_maxConcurrentTasks]
@@ -110,7 +109,7 @@ class IsolateManager {
         tag, 'Starting batch execution with max $_maxConcurrentTasks tasks.');
 
     while (_isolateQueue.isNotEmpty) {
-      final batch = <(IsolateHelper, IsolateOperation)>[];
+      final batch = <IsolateHelper>[];
       for (int i = 0;
           i < _maxConcurrentTasks && _isolateQueue.isNotEmpty;
           i++) {
@@ -119,8 +118,7 @@ class IsolateManager {
       }
 
       await Future.wait(batch.map((item) async {
-        final result =
-            await runIsolate(item.$1, item.$2, arguments[item.$2.uniqueCode]);
+        final result = await runIsolate(item, arguments[item.uniqCode]);
 
         _isolateResultStream.add(result);
       }));
@@ -132,14 +130,14 @@ class IsolateManager {
   }
 
   /// Run a single isolate and return the result
-  Future<IsolateResult> runIsolate(IsolateHelper isolateHelper,
-      IsolateOperation operation, dynamic args) async {
-    final uniqueCode = operation.uniqueCode;
+  Future<IsolateResult> runIsolate(
+      IsolateHelper isolateHelper, dynamic args) async {
+    final uniqueCode = isolateHelper.uniqCode;
 
     _runningIsolates.add(isolateHelper);
 
     try {
-      final result = await isolateHelper.runIsolate(args, operation);
+      final result = await isolateHelper.runIsolate(args);
 
       isolateHelper.dispose();
       arguments.remove(uniqueCode);
@@ -151,7 +149,7 @@ class IsolateManager {
       if (isolateHelper.retryCount > 0 &&
           (retries[uniqueCode] ?? 0) < isolateHelper.retryCount) {
         retries[uniqueCode] = (retries[uniqueCode] ?? 0) + 1;
-        _isolateQueue.add((isolateHelper, operation));
+        _isolateQueue.add((isolateHelper));
       } else {
         retries.remove(uniqueCode);
         arguments.remove(uniqueCode);
@@ -169,7 +167,7 @@ class IsolateManager {
   /// Dispose all the isolate helpers
   void disposeAll() {
     while (_isolateQueue.isNotEmpty) {
-      final (isolateHelper, operation) = _isolateQueue.removeFirst();
+      final (isolateHelper) = _isolateQueue.removeFirst();
       isolateHelper.dispose();
     }
     for (var isolateHelper in _runningIsolates) {

@@ -1,7 +1,7 @@
 ## 1.3.3 - 12/11/2025
+
 - Add lifecycle callbacks to IsolateHelper.
 - Export transferable parsing helpers.
-
 
 ## 1.2.1 - 11/11/2025
 - Implement IsolateManager 

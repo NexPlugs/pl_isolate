@@ -4,12 +4,12 @@ import 'dart:async';
 import 'package:pl_isolate/pl_isolate.dart';
 
 // Example operation 1: Count operation
-class CountableIsolateOperation extends IsolateOperation {
+class CountableIsolateOperation extends IsolateOperation<int> {
   @override
   String get tag => 'count';
 
   @override
-  Future<dynamic> run(dynamic args) async {
+  Future<int> run(dynamic args) async {
     if (args is int) {
       int countable = 0;
       for (var i = 0; i < args; i++) {
@@ -22,12 +22,12 @@ class CountableIsolateOperation extends IsolateOperation {
 }
 
 // Example operation 2: Calculate sum
-class SumIsolateOperation extends IsolateOperation {
+class SumIsolateOperation extends IsolateOperation<int> {
   @override
   String get tag => 'sum';
 
   @override
-  Future<dynamic> run(dynamic args) async {
+  Future<int> run(dynamic args) async {
     if (args is List && args.isNotEmpty) {
       int sum = 0;
       for (var num in args) {
@@ -42,12 +42,12 @@ class SumIsolateOperation extends IsolateOperation {
 }
 
 // Example operation 3: Simulate async work with delay
-class DelayIsolateOperation extends IsolateOperation {
+class DelayIsolateOperation extends IsolateOperation<String> {
   @override
   String get tag => 'delay';
 
   @override
-  Future<dynamic> run(dynamic args) async {
+  Future<String> run(dynamic args) async {
     if (args is Map && args.containsKey('duration')) {
       final duration = args['duration'] as int;
       await Future.delayed(Duration(milliseconds: duration));
@@ -71,7 +71,8 @@ class ErrorIsolateOperation extends IsolateOperation {
 // Isolate Helper implementations - mỗi helper cho một operation riêng
 
 // Helper cho Count operation
-class CountIsolateHelper extends IsolateHelper<dynamic> {
+class CountIsolateHelper
+    extends IsolateHelper<dynamic, CountableIsolateOperation> {
   @override
   bool get isDartIsolate => false;
 
@@ -83,10 +84,12 @@ class CountIsolateHelper extends IsolateHelper<dynamic> {
 
   @override
   bool get isAutoDispose => true;
+
+  CountIsolateHelper(super.operation);
 }
 
 // Helper cho Sum operation
-class SumIsolateHelper extends IsolateHelper<dynamic> {
+class SumIsolateHelper extends IsolateHelper<dynamic, SumIsolateOperation> {
   @override
   bool get isDartIsolate => false;
 
@@ -98,10 +101,12 @@ class SumIsolateHelper extends IsolateHelper<dynamic> {
 
   @override
   bool get isAutoDispose => true;
+
+  SumIsolateHelper(super.operation);
 }
 
 // Helper cho Delay operation
-class DelayIsolateHelper extends IsolateHelper<dynamic> {
+class DelayIsolateHelper extends IsolateHelper<dynamic, DelayIsolateOperation> {
   @override
   bool get isDartIsolate => false;
 
@@ -113,10 +118,12 @@ class DelayIsolateHelper extends IsolateHelper<dynamic> {
 
   @override
   bool get isAutoDispose => true;
+
+  DelayIsolateHelper(super.operation);
 }
 
 // Helper cho Error operation
-class ErrorIsolateHelper extends IsolateHelper<dynamic> {
+class ErrorIsolateHelper extends IsolateHelper<dynamic, ErrorIsolateOperation> {
   @override
   bool get isDartIsolate => false;
 
@@ -128,6 +135,8 @@ class ErrorIsolateHelper extends IsolateHelper<dynamic> {
 
   @override
   bool get isAutoDispose => true;
+
+  ErrorIsolateHelper(super.operation);
 }
 
 void main() {
@@ -143,10 +152,16 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   // Mỗi helper riêng cho từng operation
-  final CountIsolateHelper _countHelper = CountIsolateHelper();
-  final SumIsolateHelper _sumHelper = SumIsolateHelper();
-  final DelayIsolateHelper _delayHelper = DelayIsolateHelper();
-  final ErrorIsolateHelper _errorHelper = ErrorIsolateHelper();
+  final CountIsolateHelper _countHelper = CountIsolateHelper(
+    CountableIsolateOperation(),
+  );
+  final SumIsolateHelper _sumHelper = SumIsolateHelper(SumIsolateOperation());
+  final DelayIsolateHelper _delayHelper = DelayIsolateHelper(
+    DelayIsolateOperation(),
+  );
+  final ErrorIsolateHelper _errorHelper = ErrorIsolateHelper(
+    ErrorIsolateOperation(),
+  );
 
   // State cho từng operation
   String _countResult = 'No result yet';
@@ -210,10 +225,7 @@ class _MyAppState extends State<MyApp> {
 
     try {
       final stopwatch = Stopwatch()..start();
-      final result = await _countHelper.runIsolate(
-        10000000,
-        CountableIsolateOperation(),
-      );
+      final result = await _countHelper.runIsolate(10000000);
       stopwatch.stop();
 
       setState(() {
@@ -241,7 +253,6 @@ class _MyAppState extends State<MyApp> {
       final stopwatch = Stopwatch()..start();
       final result = await _sumHelper.runIsolate(
         List.generate(1000000, (i) => i),
-        SumIsolateOperation(),
       );
       stopwatch.stop();
 
@@ -268,9 +279,7 @@ class _MyAppState extends State<MyApp> {
 
     try {
       final stopwatch = Stopwatch()..start();
-      final result = await _delayHelper.runIsolate({
-        'duration': 2000,
-      }, DelayIsolateOperation());
+      final result = await _delayHelper.runIsolate({'duration': 2000});
       stopwatch.stop();
 
       setState(() {
@@ -296,10 +305,7 @@ class _MyAppState extends State<MyApp> {
 
     try {
       final stopwatch = Stopwatch()..start();
-      final result = await _errorHelper.runIsolate(
-        null,
-        ErrorIsolateOperation(),
-      );
+      final result = await _errorHelper.runIsolate(null);
       stopwatch.stop();
 
       setState(() {
@@ -328,35 +334,32 @@ class _MyAppState extends State<MyApp> {
     final batchId = ++_managerBatchCounter;
     final tasks = [
       (
-        CountIsolateHelper(),
-        CountableIsolateOperation(),
+        CountIsolateHelper(CountableIsolateOperation()),
         3000000,
         'Count to 3,000,000',
       ),
       (
-        SumIsolateHelper(),
-        SumIsolateOperation(),
+        SumIsolateHelper(SumIsolateOperation()),
         List.generate(500000, (i) => i),
         'Sum 500,000 numbers',
       ),
       (
-        DelayIsolateHelper(),
-        DelayIsolateOperation(),
+        DelayIsolateHelper(DelayIsolateOperation()),
         {'duration': 1500},
         'Delay for 1.5s',
       ),
-      (ErrorIsolateHelper(), ErrorIsolateOperation(), null, 'Simulate error'),
+      (ErrorIsolateHelper(ErrorIsolateOperation()), null, 'Simulate error'),
     ];
 
     try {
       for (final task in tasks) {
-        _isolateManager.addIsolateHelper(task.$1, task.$2, task.$3);
+        _isolateManager.addIsolateHelper(task.$1 as IsolateHelper, task.$2);
         if (mounted) {
           setState(() {
-            _managerLogs.insert(0, '📝 Batch $batchId scheduled: ${task.$4}');
+            _managerLogs.insert(0, '📝 Batch $batchId scheduled: ${task.$3}');
           });
         } else {
-          _managerLogs.insert(0, '📝 Batch $batchId scheduled: ${task.$4}');
+          _managerLogs.insert(0, '📝 Batch $batchId scheduled: ${task.$3}');
         }
       }
 

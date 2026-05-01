@@ -27,7 +27,7 @@ String generateThreadId(String task) =>
 ///   - Success: `[threadId, data, null]`
 ///   - Error: `[threadId, null, exception]`
 @pragma("vm:entry-point")
-abstract class IsolateHelper<T> {
+abstract class IsolateHelper<T, E extends IsolateOperation<T>> {
   static const String tag = "IsolateHelper";
 
   // Common actions
@@ -38,9 +38,13 @@ abstract class IsolateHelper<T> {
   late final dynamic _isolate;
   late final ReceivePort _receivePort;
   late final SendPort _mainSendPort;
+  late final IsolateOperation<T> _operation;
 
   final _initLock = Lock();
   final _runLock = Lock();
+
+  // Create isolate helper provide operation
+  IsolateHelper(IsolateOperation<T> operation) : _operation = operation;
 
   Timer? _inactiveTimer;
   IsolateCache<String, dynamic>? _cache;
@@ -63,6 +67,7 @@ abstract class IsolateHelper<T> {
   Duration get autoDisposeInterval => const Duration(seconds: 10);
   int? get maxCacheEntries => null;
   Duration? get defaultCacheTtl => null;
+  String get uniqCode => _operation.uniqueCode;
 
   bool get isIsolateSpawn => _isIsolateSpawn;
 
@@ -137,14 +142,14 @@ abstract class IsolateHelper<T> {
   }
 
   /// Run an isolate task and return result
-  Future<T> runIsolate(dynamic args, IsolateOperation operation) async {
+  Future<T> runIsolate(dynamic args) async {
     Logger.d(tag, 'Running isolate: $name');
 
     // Return cached data if available
     final cached = _cache?.get(name);
     if (cached != null && cached is T) return cached;
 
-    await _initIsolate(operation);
+    await _initIsolate(_operation);
 
     return _runLock.synchronized(() async {
       if (autoDispose) _resetTimer();
@@ -155,7 +160,7 @@ abstract class IsolateHelper<T> {
       _activeThread++;
       final threadId = generateThreadId(name);
 
-      _mainSendPort.send([threadId, operation.tag, args, answerPort.sendPort]);
+      _mainSendPort.send([threadId, _operation.tag, args, answerPort.sendPort]);
 
       answerPort.listen((message) {
         IsolateLogger.instance.log(tag, 'Message received: $message');

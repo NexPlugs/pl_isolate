@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pl_isolate/pl_isolate.dart';
 
-class CountableIsolateOperation extends IsolateOperation {
+class CountableIsolateOperation extends IsolateOperation<int> {
   @override
   String get tag => 'count';
   @override
-  Future<dynamic> run(dynamic args) async {
+  Future<int> run(dynamic args) async {
     if (args is int) {
       int countable = 0;
       for (var i = 0; i < args; i++) {
@@ -17,7 +17,8 @@ class CountableIsolateOperation extends IsolateOperation {
   }
 }
 
-class CountableIsolateHelper extends IsolateHelper<int> {
+class CountableIsolateHelper
+    extends IsolateHelper<int, CountableIsolateOperation> {
   @override
   bool get isAutoDispose => true;
 
@@ -32,31 +33,30 @@ class CountableIsolateHelper extends IsolateHelper<int> {
         maxEntries: 1000,
         defaultTtl: const Duration(seconds: 10),
       );
+
+  CountableIsolateHelper() : super(CountableIsolateOperation());
 }
 
 void main() {
   group("IsolateHelper test", () {
     test('IsolateHelper test', () async {
       final isolateHelper = CountableIsolateHelper();
-      final result =
-          await isolateHelper.runIsolate(10000000, CountableIsolateOperation());
+      final result = await isolateHelper.runIsolate(10000000);
       expect(result, 10000000);
     });
 
     test('IsolateHelper test with cache', () async {
       final isolateHelper = CountableIsolateHelper();
-      final result =
-          await isolateHelper.runIsolate(10000000, CountableIsolateOperation());
+      final result = await isolateHelper.runIsolate(10000000);
       expect(result, 10000000);
-      final result2 =
-          await isolateHelper.runIsolate(2000, CountableIsolateOperation());
+      final result2 = await isolateHelper.runIsolate(2000);
       expect(result2, 2000);
     });
 
     test("IsolateHelper test with error response", () async {
       final isolateHelper = CountableIsolateHelper();
       try {
-        await isolateHelper.runIsolate(10000000, CountableIsolateOperation());
+        await isolateHelper.runIsolate(100000000000);
       } catch (e) {
         expect(e, isA<Exception>());
       }
@@ -68,12 +68,9 @@ void main() {
       isolateManager.listenIsolateResult((result) {
         print('Isolate result: ${result.result}');
       });
-      isolateManager.addIsolateHelper(
-          CountableIsolateHelper(), CountableIsolateOperation(), 2000);
-      isolateManager.addIsolateHelper(
-          CountableIsolateHelper(), CountableIsolateOperation(), 3000);
-      isolateManager.addIsolateHelper(
-          CountableIsolateHelper(), CountableIsolateOperation(), 4000);
+      isolateManager.addIsolateHelper(CountableIsolateHelper(), 2000);
+      isolateManager.addIsolateHelper(CountableIsolateHelper(), 3000);
+      isolateManager.addIsolateHelper(CountableIsolateHelper(), 4000);
 
       isolateManager.logInformation();
 
