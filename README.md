@@ -1,30 +1,36 @@
-# pl_isolate
 
+
+
+# pl_isolate
 
 https://github.com/user-attachments/assets/31985cfa-f3b4-440e-8459-fdc4f8dc7fe1
 
+A powerful Flutter plugin that simplifies isolate communication and management.  
+Run heavy computations in separate isolates without blocking the UI thread.
 
-A powerful Flutter plugin that simplifies isolate communication and management. Run heavy computations in separate isolates without blocking the UI thread.
+---
 
-## Features
+## ✨ Features
 
-- 🚀 **Easy Isolate Management**: Simple API to create and manage isolates
-- 🔄 **Automatic Disposal**: Auto-dispose isolates after inactivity
-- 🎯 **Type-Safe Operations**: Define operations with clear interfaces
-- 🔐 **Thread-Safe**: Built-in synchronization for concurrent operations
-- 📊 **Multiple Isolates**: Each operation can have its own isolate helper
-- 🎨 **UI Isolate Support**: Support for both Dart isolates and UI isolates
-- ⚡ **Performance**: Run CPU-intensive tasks without blocking the main thread
-- 📦 **Transferable Data for Large Payloads**: Efficient support for sending/receiving large data between isolates using Dart's transferable objects
+- 🚀 Easy isolate lifecycle management
+- 🔄 Auto-dispose isolates after inactivity
+- 🎯 Strongly-typed operations (`IsolateOperation<T>`)
+- 🧩 One helper per operation (clean architecture friendly)
+- ⚡ Non-blocking UI for CPU-intensive work
+- 📊 Built-in `IsolateManager` for batching & concurrency control
+- 🔐 Safe error propagation from isolate → UI
+- 📦 Optimized data transfer (supports large payloads)
 
-## Installation
+---
 
-Add this to your package's `pubspec.yaml` file:
+## 📦 Installation
+
+Add this to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
   pl_isolate: ^1.0.0
-```
+````
 
 Then run:
 
@@ -32,182 +38,23 @@ Then run:
 flutter pub get
 ```
 
-## Quick Start
+---
 
-### 1. Define Your Operation
+## 🚀 Quick Start
 
-Create an operation class that implements `IsolateOperation`:
+### 1. Define an Operation
+
+Each task is represented by an `IsolateOperation<T>`.
 
 ```dart
 import 'package:pl_isolate/pl_isolate.dart';
 
-class MyCalculationOperation implements IsolateOperation {
-  @override
-  String get tag => 'calculation';
-
-  @override
-  Future<dynamic> run(dynamic args) async {
-    // Your heavy computation here
-    if (args is int) {
-      int result = 0;
-      for (var i = 0; i < args; i++) {
-        result += i;
-      }
-      return result;
-    }
-    throw Exception('Invalid arguments');
-  }
-}
-```
-
-### 2. Create Your Isolate Helper
-
-Extend `IsolateHelper` to create your helper:
-
-```dart
-class MyIsolateHelper extends IsolateHelper<int> {
-  @override
-  bool get isDartIsolate => false; // Use false for regular isolates, true for UI isolates
-
-  @override
-  String get name => 'MyIsolateHelper'; // Unique name for this helper
-
-  @override
-  bool get isAutoDispose => true; // Auto-dispose after inactivity
-
-  @override
-  Stream get messages => throw UnimplementedError(); // Required but not used
-}
-```
-
-### 3. Use the Helper
-
-```dart
-class MyWidget extends StatefulWidget {
-  @override
-  State<MyWidget> createState() => _MyWidgetState();
-}
-
-class _MyWidgetState extends State<MyWidget> {
-  final MyIsolateHelper _helper = MyIsolateHelper();
-
-  Future<void> _runCalculation() async {
-    try {
-      final result = await _helper.runIsolate(
-        1000000, // Arguments
-        MyCalculationOperation(), // Your operation
-      );
-      print('Result: $result');
-    } catch (e) {
-      print('Error: $e');
-    }
-  }
-
-  @override
-  void dispose() {
-    _helper.dispose(); // Don't forget to dispose
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ElevatedButton(
-      onPressed: _runCalculation,
-      child: Text('Run Calculation'),
-    );
-  }
-}
-```
-
-## Managing Multiple Tasks with `IsolateManager`
-
-When you need to queue different helpers and execute them with concurrency limits, use `IsolateManager`.
-
-### 1. Initialize the Manager
-
-```dart
-void main() {
-  // Allow 2 concurrent tasks and up to 10 queued jobs.
-  IsolateManager.init(2, 10);
-  runApp(const MyApp());
-}
-```
-
-### 2. Add Tasks to the Queue
-
-```dart
-void scheduleTasks() {
-  final manager = IsolateManager.instance;
-
-  manager.addIsolateHelper(
-    MyIsolateHelper(),
-    MyCalculationOperation(),
-    1000000,
-  );
-
-  manager.addIsolateHelper(
-    OtherHelper(),
-    OtherOperation(),
-    {'duration': 2000},
-  );
-}
-```
-
-Each call enqueues the helper/operation pair along with its arguments. You can enqueue as many as `maxSizeOfQueue`.
-
-### 3. Listen for Results (Optional)
-
-```dart
-@override
-void initState() {
-  super.initState();
-  IsolateManager.instance.listenIsolateResult((IsolateResult result) {
-    if (result.errorMessage != null) {
-      debugPrint('Task ${result.name} failed: ${result.errorMessage}');
-    } else {
-      debugPrint('Task ${result.name} completed: ${result.result}');
-    }
-  });
-}
-```
-
-### 4. Run the Batch
-
-```dart
-Future<void> runQueue() async {
-  await IsolateManager.instance.runAllInBatches();
-}
-```
-
-The manager executes the queue in batches, honoring the `maxConcurrentTasks` limit. Results are pushed through the listener as each task finishes.
-
-### 5. Clean Up
-
-Call `disposeAll()` when you are done to release helpers left in the queue or running list.
-
-```dart
-@override
-void dispose() {
-  IsolateManager.instance.disposeAll();
-  super.dispose();
-}
-```
-
-## Complete Example
-
-Here's a complete example showing multiple operations:
-
-```dart
-import 'package:flutter/material.dart';
-import 'package:pl_isolate/pl_isolate.dart';
-
-// Define operations
-class CountOperation implements IsolateOperation {
+class CountableIsolateOperation extends IsolateOperation<int> {
   @override
   String get tag => 'count';
 
   @override
-  Future<dynamic> run(dynamic args) async {
+  Future<int> run(dynamic args) async {
     if (args is int) {
       int count = 0;
       for (var i = 0; i < args; i++) {
@@ -218,322 +65,328 @@ class CountOperation implements IsolateOperation {
     return 0;
   }
 }
+```
 
-class SumOperation implements IsolateOperation {
-  @override
-  String get tag => 'sum';
+---
 
-  @override
-  Future<dynamic> run(dynamic args) async {
-    if (args is List) {
-      return args.fold<int>(0, (sum, item) => sum + (item as int));
-    }
-    return 0;
-  }
-}
+### 2. Create a Helper
 
-// Create helpers
-class CountHelper extends IsolateHelper<int> {
+Each operation has its own `IsolateHelper`.
+
+```dart
+class CountIsolateHelper
+    extends IsolateHelper<dynamic, CountableIsolateOperation> {
+
   @override
   bool get isDartIsolate => false;
+
   @override
-  String get name => 'CountHelper';
+  String get name => 'CountIsolateHelper';
+
   @override
   bool get isAutoDispose => true;
+
+  CountIsolateHelper(super.operation);
+}
+```
+
+> ✅ Operation is injected via constructor — NOT passed at runtime
+
+---
+
+### 3. Execute in UI
+
+```dart
+class MyWidget extends StatefulWidget {
   @override
-  Stream get messages => throw UnimplementedError();
+  State<MyWidget> createState() => _MyWidgetState();
 }
 
-class SumHelper extends IsolateHelper<int> {
-  @override
-  bool get isDartIsolate => false;
-  @override
-  String get name => 'SumHelper';
-  @override
-  bool get isAutoDispose => true;
-  @override
-  Stream get messages => throw UnimplementedError();
-}
+class _MyWidgetState extends State<MyWidget> {
+  late final CountIsolateHelper _helper;
 
-// Use in your app
-class MyApp extends StatefulWidget {
   @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  final CountHelper _countHelper = CountHelper();
-  final SumHelper _sumHelper = SumHelper();
-
-  String _countResult = 'No result';
-  String _sumResult = 'No result';
-  bool _isLoading = false;
-
-  Future<void> _runCount() async {
-    setState(() => _isLoading = true);
-    try {
-      final result = await _countHelper.runIsolate(
-        10000000,
-        CountOperation(),
-      );
-      setState(() {
-        _countResult = 'Count: $result';
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _countResult = 'Error: $e';
-        _isLoading = false;
-      });
-    }
+  void initState() {
+    super.initState();
+    _helper = CountIsolateHelper(CountableIsolateOperation());
   }
 
-  Future<void> _runSum() async {
-    setState(() => _isLoading = true);
+  Future<void> runTask() async {
     try {
-      final result = await _sumHelper.runIsolate(
-        List.generate(1000000, (i) => i),
-        SumOperation(),
-      );
-      setState(() {
-        _sumResult = 'Sum: $result';
-        _isLoading = false;
-      });
+      final result = await _helper.runIsolate(1000000);
+      print('Result: $result');
     } catch (e) {
-      setState(() {
-        _sumResult = 'Error: $e';
-        _isLoading = false;
-      });
+      print('Error: $e');
     }
   }
 
   @override
   void dispose() {
-    _countHelper.dispose();
-    _sumHelper.dispose();
+    _helper.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(title: Text('Isolate Helper Example')),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (_isLoading) CircularProgressIndicator(),
-              Text(_countResult),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _runCount,
-                child: Text('Run Count'),
-              ),
-              SizedBox(height: 20),
-              Text(_sumResult),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _runSum,
-                child: Text('Run Sum'),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return ElevatedButton(
+      onPressed: runTask,
+      child: const Text('Run Task'),
     );
   }
 }
 ```
 
-## API Reference
+---
 
-### IsolateHelper<T>
+## 🧠 Core Concept
 
-Abstract class for managing isolates.
+```
+IsolateOperation  →  Business logic
+IsolateHelper     →  Isolate lifecycle + execution
+IsolateManager    →  Queue + concurrency control
+```
 
-#### Properties
+---
 
-- `isDartIsolate` (bool): `true` for Dart UI isolates, `false` for regular isolates
-- `name` (String): Unique name for the helper
-- `isAutoDispose` (bool): Whether to auto-dispose after inactivity
-- `isIsolateSpawn` (bool): Whether the isolate is currently spawned
-- `autoDisposeInterval` (Duration): Time before auto-dispose (default: 10 seconds)
+## ⚙️ Using IsolateManager (Advanced)
 
-#### Methods
-
-- `Future<T> runIsolate(dynamic args, IsolateOperation operation)`: Run an operation in the isolate
-- `Future<void> dispose()`: Manually dispose the isolate
-
-### IsolateOperation
-
-Abstract class for defining operations.
-
-#### Properties
-
-- `tag` (String): Unique tag for the operation
-
-#### Methods
-
-- `Future<dynamic> run(dynamic args)`: Execute the operation
-
-## Dart Isolate vs UI Isolate
-
-### Regular Isolate (`isDartIsolate: false`)
-
-- Requires `RootIsolateToken` for platform channel access
-- Use for computations that don't need UI access
-- Better performance for CPU-intensive tasks
+### Initialize
 
 ```dart
-class MyHelper extends IsolateHelper<dynamic> {
+final manager = IsolateManager.init(2, 12);
+// 2 concurrent tasks, max 12 in queue
+```
+
+---
+
+### Add Tasks
+
+```dart
+manager.addIsolateHelper(
+  CountIsolateHelper(CountableIsolateOperation()),
+  3000000,
+);
+
+manager.addIsolateHelper(
+  SumIsolateHelper(SumIsolateOperation()),
+  List.generate(500000, (i) => i),
+);
+```
+
+---
+
+### Listen for Results
+
+```dart
+manager.listenIsolateResult((result) {
+  if (result.errorMessage != null) {
+    print('❌ ${result.name}: ${result.errorMessage}');
+  } else {
+    print('✅ ${result.name}: ${result.result}');
+  }
+});
+```
+
+---
+
+### Run Batch
+
+```dart
+await manager.runAllInBatches();
+```
+
+---
+
+### Dispose
+
+```dart
+manager.disposeAll();
+```
+
+---
+
+## 🧪 Example Operations
+
+### Sum Operation
+
+```dart
+class SumIsolateOperation extends IsolateOperation<int> {
   @override
-  bool get isDartIsolate => false;
-  // ... other properties
+  String get tag => 'sum';
+
+  @override
+  Future<int> run(dynamic args) async {
+    if (args is List) {
+      int sum = 0;
+      for (final item in args) {
+        if (item is int) sum += item;
+      }
+      return sum;
+    }
+    return 0;
+  }
 }
 ```
 
-### UI Isolate (`isDartIsolate: true`)
+---
 
-- Can access UI-related APIs
-- Use when you need platform channels or UI access
-- Requires Flutter bindings to be initialized
+### Delay Operation
 
 ```dart
-class MyHelper extends IsolateHelper<dynamic> {
+class DelayIsolateOperation extends IsolateOperation<String> {
   @override
-  bool get isDartIsolate => true;
-  // ... other properties
+  String get tag => 'delay';
+
+  @override
+  Future<String> run(dynamic args) async {
+    if (args is Map && args.containsKey('duration')) {
+      final duration = args['duration'] as int;
+      await Future.delayed(Duration(milliseconds: duration));
+      return 'Completed after ${duration}ms';
+    }
+    return 'Invalid arguments';
+  }
 }
 ```
 
-## Best Practices
+---
 
-### 1. One Helper per Operation Type
-
-Each helper should manage one type of operation:
+### Error Operation
 
 ```dart
-// Good: Separate helpers for different operations
-class ImageProcessingHelper extends IsolateHelper<Uint8List> { ... }
-class DataAnalysisHelper extends IsolateHelper<AnalysisResult> { ... }
+class ErrorIsolateOperation extends IsolateOperation {
+  @override
+  String get tag => 'error';
 
-// Avoid: One helper for multiple unrelated operations
-class AllOperationsHelper extends IsolateHelper<dynamic> { ... }
+  @override
+  Future<dynamic> run(dynamic args) async {
+    throw Exception('This is a test error from isolate');
+  }
+}
 ```
 
-### 2. Always Dispose Helpers
+---
 
-Make sure to dispose helpers when they're no longer needed:
+## 🧩 Best Practices
+
+### 1. One Helper = One Operation
+
+```dart
+// ✅ Good
+CountIsolateHelper
+SumIsolateHelper
+
+// ❌ Avoid
+GenericHelper
+```
+
+---
+
+### 2. Do NOT pass operation into runIsolate
+
+```dart
+// ✅ Correct
+helper.runIsolate(args);
+
+// ❌ Wrong (old API)
+helper.runIsolate(args, operation);
+```
+
+---
+
+### 3. Always Dispose
 
 ```dart
 @override
 void dispose() {
-  _helper.dispose();
+  helper.dispose();
   super.dispose();
 }
 ```
 
-### 3. Handle Errors Properly
+---
 
-Always wrap isolate operations in try-catch:
+### 4. Use Manager for Heavy Workloads
 
-```dart
-try {
-  final result = await _helper.runIsolate(args, operation);
-  // Handle success
-} catch (e) {
-  // Handle error
-}
-```
-
-### 4. Use Auto-Dispose for Temporary Operations
-
-Enable auto-dispose for operations that are run infrequently:
-
-```dart
-@override
-bool get isAutoDispose => true;
-```
-
-### 5. Pass Serializable Data
-
-Only pass data that can be serialized between isolates:
-
-```dart
-// Good: Primitive types, lists, maps
-final result = await helper.runIsolate(42, operation);
-final result = await helper.runIsolate([1, 2, 3], operation);
-final result = await helper.runIsolate({'key': 'value'}, operation);
-
-// Avoid: Complex objects, closures, functions
-// These cannot be serialized between isolates
-```
-
-## Advanced Usage
-
-### Custom Auto-Dispose Interval
-
-Override `autoDisposeInterval` to customize the disposal time:
-
-```dart
-class MyHelper extends IsolateHelper<dynamic> {
-  @override
-  Duration get autoDisposeInterval => const Duration(seconds: 30);
-  // ... other properties
-}
-```
-
-### Running Multiple Operations Concurrently
-
-Each helper can run operations independently:
-
-```dart
-// Run multiple operations at the same time
-final result1 = _helper1.runIsolate(args1, operation1);
-final result2 = _helper2.runIsolate(args2, operation2);
-final result3 = _helper3.runIsolate(args3, operation3);
-
-// Wait for all to complete
-final results = await Future.wait([result1, result2, result3]);
-```
-
-### Checking Isolate Status
-
-Monitor isolate state:
-
-```dart
-if (_helper.isIsolateSpawn) {
-  print('Isolate is active');
-} else {
-  print('Isolate is inactive');
-}
-```
-
-## Troubleshooting
-
-### Error: "Root isolate token is not set"
-
-**Solution**: If using `isDartIsolate: false`, make sure you're running in a Flutter app context. For UI isolates, use `isDartIsolate: true`.
-
-### Isolate Not Disposing
-
-**Solution**: Check if `isAutoDispose` is set to `true` and ensure no active operations are running.
-
-### Serialization Errors
-
-**Solution**: Ensure all data passed to `runIsolate` is serializable. Avoid passing complex objects, closures, or functions.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For issues and feature requests, please use the [GitHub Issues](https://github.com/NexPlugs/pl_isolate/issues) page.
+* Few tasks → use helper directly
+* Many tasks → use IsolateManager
 
 ---
 
-Made with ❤️ by the NexPlugs team
+### 5. Pass Serializable Data Only
+
+```dart
+// ✅ OK
+int, String, List, Map
+
+// ❌ Avoid
+BuildContext, Function, Stream
+```
+
+---
+
+## ⚡ Dart Isolate vs UI Isolate
+
+### Regular Isolate (`isDartIsolate = false`)
+
+* Best performance
+* No UI access
+* Recommended for most cases
+
+---
+
+### UI Isolate (`isDartIsolate = true`)
+
+* Needed for platform channels
+* Slightly heavier
+
+---
+
+## 🧯 Troubleshooting
+
+### Isolate not running?
+
+* Check helper initialization
+* Verify `isDartIsolate`
+
+### Serialization error?
+
+* Ensure data is transferable
+
+### Memory leak?
+
+* Forgot `dispose()`
+
+---
+
+## ❤️ Why pl_isolate?
+
+| Feature         | compute() | pl_isolate |
+| --------------- | --------- | ---------- |
+| Reuse isolate   | ❌         | ✅          |
+| Queue system    | ❌         | ✅          |
+| Error handling  | Basic     | Advanced   |
+| Typed API       | ❌         | ✅          |
+| Batch execution | ❌         | ✅          |
+
+---
+
+## 🤝 Contributing
+
+Pull requests are welcome!
+
+---
+
+## 📄 License
+
+MIT License
+
+---
+
+## 💬 Support
+
+[https://github.com/NexPlugs/pl_isolate/issues](https://github.com/NexPlugs/pl_isolate/issues)
+
+---
+
+Made with ❤️ by NexPlugs

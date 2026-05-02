@@ -1,3 +1,6 @@
+## 1.4.0 - 2/5/2026
+- Update create isolate helper instance rule
+
 ## 1.3.3 - 12/11/2025
 
 - Add lifecycle callbacks to IsolateHelper.

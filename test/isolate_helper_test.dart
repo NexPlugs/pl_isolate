@@ -56,7 +56,7 @@ void main() {
     test("IsolateHelper test with error response", () async {
       final isolateHelper = CountableIsolateHelper();
       try {
-        await isolateHelper.runIsolate(100000000000);
+        await isolateHelper.runIsolate(100000000);
       } catch (e) {
         expect(e, isA<Exception>());
       }
